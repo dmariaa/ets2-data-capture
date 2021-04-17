@@ -5,6 +5,8 @@ VisualStudioVersion = 16.0.31129.286
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ETS2DataCapture", "ETS2DataCapture.vcxproj", "{53C4A461-779C-4D38-9B1F-546B49BD3DFC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Tests", "..\Tests\Tests.vcxproj", "{B3EFF8A0-D144-4BA8-B9CA-3D94869AC12B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{53C4A461-779C-4D38-9B1F-546B49BD3DFC}.Release|x64.Build.0 = Release|x64
 		{53C4A461-779C-4D38-9B1F-546B49BD3DFC}.Release|x86.ActiveCfg = Release|Win32
 		{53C4A461-779C-4D38-9B1F-546B49BD3DFC}.Release|x86.Build.0 = Release|Win32
+		{B3EFF8A0-D144-4BA8-B9CA-3D94869AC12B}.Debug|x64.ActiveCfg = Debug|x64
+		{B3EFF8A0-D144-4BA8-B9CA-3D94869AC12B}.Debug|x64.Build.0 = Debug|x64
+		{B3EFF8A0-D144-4BA8-B9CA-3D94869AC12B}.Debug|x86.ActiveCfg = Debug|Win32
+		{B3EFF8A0-D144-4BA8-B9CA-3D94869AC12B}.Debug|x86.Build.0 = Debug|Win32
+		{B3EFF8A0-D144-4BA8-B9CA-3D94869AC12B}.Release|x64.ActiveCfg = Release|x64
+		{B3EFF8A0-D144-4BA8-B9CA-3D94869AC12B}.Release|x64.Build.0 = Release|x64
+		{B3EFF8A0-D144-4BA8-B9CA-3D94869AC12B}.Release|x86.ActiveCfg = Release|Win32
+		{B3EFF8A0-D144-4BA8-B9CA-3D94869AC12B}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
