@@ -3,15 +3,35 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros">
     <BOOST_ROOT>C:\Program Files\boost\boost_1_75_0\</BOOST_ROOT>
+    <ETS2_DATA_FOLDER>$(USERPROFILE)\Documents\Euro Truck Simulator 2</ETS2_DATA_FOLDER>
+    <ETS_PROGRAM_FOLDER>$(ProgramFiles)\Euro Truck Simulator 2\bin\win_$(PlatformShortName)</ETS_PROGRAM_FOLDER>
+    <ETS_STEAM_PROGRAM_FOLDER>$(ProgramFiles)\Steam\steamapps\common\Euro Truck Simulator 2\bin\win_$(PlatformShortName)</ETS_STEAM_PROGRAM_FOLDER>
   </PropertyGroup>
   <PropertyGroup>
-    <IncludePath>$(BOOST_ROOT);$(SolutionDir)DirectXTK\Include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
+    <IncludePath>$(BOOST_ROOT);$(SolutionDir)plog\include;$(SolutionDir)DirectXTK\Include;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
     <LibraryPath>$(SolutionDir)DirectXTK\Libs\x64\$(Configuration);$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
-  <ItemDefinitionGroup />
+  <ItemDefinitionGroup>
+    <PostBuildEvent>
+      <Command>xcopy /R /Y "$(ProjectDir)$(PlatformShortName)\$(Configuration)\$(ProjectName).dll" "$(ETS_STEAM_PROGRAM_FOLDER)\plugins"
+xcopy /R /Y "$(ProjectDir)$(PlatformShortName)\$(Configuration)\$(ProjectName).dll" "$(ETS_PROGRAM_FOLDER)\plugins"</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
   <ItemGroup>
     <BuildMacro Include="BOOST_ROOT">
       <Value>$(BOOST_ROOT)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="ETS2_DATA_FOLDER">
+      <Value>$(ETS2_DATA_FOLDER)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="ETS_PROGRAM_FOLDER">
+      <Value>$(ETS_PROGRAM_FOLDER)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="ETS_STEAM_PROGRAM_FOLDER">
+      <Value>$(ETS_STEAM_PROGRAM_FOLDER)</Value>
       <EnvironmentVariable>true</EnvironmentVariable>
     </BuildMacro>
   </ItemGroup>

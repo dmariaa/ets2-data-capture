@@ -1,0 +1,6 @@
+[submodule "plog"]
+	path = plog
+	url = https://github.com/SergiusTheBest/plog.git
+[submodule "kiero"]
+	path = kiero
+	url = https://github.com/Rebzzel/kiero.git

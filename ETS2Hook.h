@@ -1,36 +1,84 @@
 #pragma once
-#include <d3d11.h>
-#include <iostream>
+#include "globals.h"
+
 #include <sstream>
 
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "DirectXTK.lib")
-
 class Config;
+class AppSettings;
 
+/// <summary>
+/// Hook class for Euro Truck Simulator 2
+/// </summary>
 class ETS2Hook
 {
+	// Pointers to useful objects
 	ID3D11Device* pDevice;
 	ID3D11DeviceContext* pDeviceContext;
 	ID3D11Texture2D* pScreenshotTexture;
+	HWND outputWindow;
 
 	bool capturing;
 	int totalFramesCaptured;
+	int frame;
+	clock_t timer;
 
 	// Configuration vars
 	int consecutiveFramesCapture;
 	int secondsBetweenCaptures; 	
 	std::wstring imageFolder;
 	std::wstring imageFileFormat;
-	std::wstring imageFileName;
+	std::wstring imageFileName;	
 
-	std::wstringstream imageFile;
-public:
-	ETS2Hook();
+	// ImGui Stuff	
+	bool imGuiDrawEnabled;
+	void initImGui(IDXGISwapChain* pSwapChain, ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext);
+	void shutdownImGui();
+	void renderImGui();
+
+	// Input handling stuff	
+	void initInput();
+	void shutdownInput();
+
+	static WNDPROC ETS2_hWndProc;
+	static ETS2Hook* pThis;
+	static LRESULT CALLBACK hWndProcWrapper(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	LRESULT CALLBACK hWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 	
-	HRESULT Init(IDXGISwapChain* swapChain);
-	HRESULT RenderIMGUI();
+	// Raw input hooking
+	RAWINPUTDEVICE ETS2RidMouse;
+	void getRawMouseDevice();
+	void startRawInputCapture();
+	void endRawInputCapture();
+	void processRawMouse(RAWMOUSE rawMouse);
+
+	// Mouse hook stuff
+	HHOOK mouseHookHandle;
+	static LRESULT CALLBACK mouseHookWrapper(int nCode, WPARAM wParam, LPARAM lParam);
+	LRESULT CALLBACK mouseHook(int nCode, WPARAM wParam, LPARAM lParam);
+
+	// Some util functions
 	HRESULT TakeScreenshot(IDXGISwapChain* swapChain, const wchar_t* fileName);
-	HRESULT Present(IDXGISwapChain* swapChain);
+
+	// Settings change update
+	void updateSettings();
+
+	AppSettings* appSettings;
+public:
+	ETS2Hook();	
+	~ETS2Hook();
+
+	/// <summary>
+	/// Called to initialize usefull DX11 stuff
+	/// </summary>
+	/// <param name="swapChain"></param>
+	/// <returns></returns>
+	HRESULT Init(IDXGISwapChain* swapChain);	
+
+	/// <summary>
+	/// Called before DX11 present call
+	/// </summary>
+	/// <param name="swapChain"></param>
+	/// <returns></returns>
+	HRESULT Present(IDXGISwapChain* swapChain);	
 };
 
