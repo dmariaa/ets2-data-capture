@@ -2,9 +2,47 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <chrono>
+#include <date/date.h>
+
+#define FMT_HEADER_ONLY
+#include <fmt/format.h>
 
 #include <ShlObj_core.h>
 #include <Shlwapi.h>
+
+struct snapshot_stats {
+	std::chrono::system_clock::time_point start;
+	std::chrono::system_clock::time_point snapshot_time;
+
+	unsigned frame = 0;
+	unsigned total_frames = 0;
+	unsigned snapshot = 0;
+	unsigned total_snapshots = 0;
+
+
+	std::wstring formatted(std::wstring format)
+	{
+		auto unixTime = std::chrono::duration_cast<std::chrono::milliseconds>(snapshot_time.time_since_epoch()).count();
+		auto dp = date::floor<date::days>(snapshot_time);
+		auto ymd = date::year_month_day{ dp };
+		auto time = date::make_time(std::chrono::duration_cast<std::chrono::milliseconds>(snapshot_time - dp));
+
+		return fmt::format(format,
+			fmt::arg(L"frame", frame),
+			fmt::arg(L"snapshot", snapshot),
+			fmt::arg(L"totalFramesCaptured", total_frames),
+			fmt::arg(L"totalSnapshotsTaken", total_snapshots),
+			fmt::arg(L"timestamp", unixTime),
+			fmt::arg(L"year", (int)ymd.year()),
+			fmt::arg(L"month", (unsigned)ymd.month()),
+			fmt::arg(L"day", (unsigned)ymd.day()),
+			fmt::arg(L"hour", time.hours().count()),
+			fmt::arg(L"minute", time.minutes().count()),
+			fmt::arg(L"second", time.seconds().count()),
+			fmt::arg(L"millisecond", time.subseconds().count()));
+	}
+};
 
 /// <summary>
 /// Configuration keys

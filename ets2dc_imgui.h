@@ -42,6 +42,7 @@ class AppSettings {
 
     bool changed = false;
 public:
+    bool simulate;
     bool isCapturing = false;
     int currentLogLevel = 0;
     int consecutiveFrames = 1;

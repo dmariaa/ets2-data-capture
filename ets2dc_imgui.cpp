@@ -150,6 +150,7 @@ AppSettings::AppSettings()
     currentLogLevel = ets2dc_utils::logLevelFromString(configLogLevel);
     consecutiveFrames = ets2dc_config::get(ets2dc_config_keys::consecutive_frames, 2);
     secondsBetweenSnapshots = ets2dc_config::get(ets2dc_config_keys::seconds_between_captures, 3);
+    simulate = false;
 }
 
 void AppSettings::Draw(const char* windowName)
@@ -182,9 +183,10 @@ void AppSettings::Draw(const char* windowName)
         }
 
         ImGui::Separator();
-        someChanged |= changed || ImGui::SliderInt("Consecutive frames recorded", &consecutiveFrames, 1, 5);
-        someChanged |= ImGui::SliderInt("Seconds between snapshots", &secondsBetweenSnapshots, 1, 10);
-        
+        someChanged |= changed || ImGui::SliderInt("FPS recorded", &consecutiveFrames, 1, 30);
+        someChanged |= ImGui::SliderInt("Seconds between snapshots", &secondsBetweenSnapshots, 1, 60);
+        someChanged |= ImGui::Checkbox("Simultate (log only)", &simulate);
+
         if (ImGui::Button(isCapturing ? "Stop capturing" : "Start capturing")) 
         {
             isCapturing = !isCapturing;

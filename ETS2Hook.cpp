@@ -5,6 +5,10 @@
 #include <ShlObj_core.h>
 #include <hidusage.h>
 #include <strsafe.h>
+#include <chrono>
+
+#define FMT_HEADER_ONLY
+#include <fmt/format.h>
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_dx11.h"
@@ -22,11 +26,13 @@ using namespace Microsoft::WRL;
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+const wchar_t* ETS2Hook::fmtFile = L"{imageFolder}\\{fileName}.{fileFormat}";
+static const wchar_t* defaultFileName = L"snapshot-{unix-timestamp}-{snapshot}-{frame}";
+
 WNDPROC ETS2Hook::ETS2_hWndProc = nullptr;
 ETS2Hook* ETS2Hook::pThis = nullptr;
 
-
-ETS2Hook::ETS2Hook() : capturing(false), totalFramesCaptured(0), frame(0)
+ETS2Hook::ETS2Hook() : capturing(false), simulate(false), inputCaptured(false), queue(100)
 {
 	imageFolder = ets2dc_config::get(ets2dc_config_keys::image_folder, L"images");
 	imageFileFormat = ets2dc_config::get(ets2dc_config_keys::image_file_format, L"jpg");
@@ -41,6 +47,11 @@ ETS2Hook::ETS2Hook() : capturing(false), totalFramesCaptured(0), frame(0)
 	PLOGI << "Consecutive frames: " << consecutiveFramesCapture;
 	PLOGI << "Seconds Between Captures: " << secondsBetweenCaptures;
 	PLOGI << "----------------------------------------------";
+
+	formatString = fmt::format(fmtFile,
+		fmt::arg(L"imageFolder", imageFolder),
+		fmt::arg(L"fileName", imageFileName),
+		fmt::arg(L"fileFormat", imageFileFormat));
 
 	appSettings = new AppSettings();
 }
@@ -64,6 +75,9 @@ HRESULT ETS2Hook::Init(IDXGISwapChain* pSwapChain)
 			pDevice->GetImmediateContext(&pDeviceContext);
 			initImGui(pSwapChain, pDevice, pDeviceContext);
 			initInput();
+
+			// Test thread
+			std::thread(&ETS2Hook::saveBuffer, this).detach();
 		}
 	}
 
@@ -93,36 +107,33 @@ void ETS2Hook::initImGui(IDXGISwapChain* pSwapChain, ID3D11Device* pDevice, ID3D
 
 void ETS2Hook::renderImGui()
 {
-	if (imGuiDrawEnabled) {
-		// std::cout << "Drawing ImGui window" << std::endl;
-		ImGuiIO& io = ImGui::GetIO();
-		io.MouseDrawCursor = true;
-		io.WantCaptureMouse = true;
+	// std::cout << "Drawing ImGui window" << std::endl;
+	ImGuiIO& io = ImGui::GetIO();
+	io.MouseDrawCursor = true;
+	io.WantCaptureMouse = true;
 
-		ImGui_ImplDX11_NewFrame();
-		ImGui_ImplWin32_NewFrame();
-		ImGui::NewFrame();
+	ImGui_ImplDX11_NewFrame();
+	ImGui_ImplWin32_NewFrame();
+	ImGui::NewFrame();
 
-		// Here goes our own ImGui drawing code
-		appSettings->Draw("ETS2DataCapture settings");
+	// Here goes our own ImGui drawing code
+	appSettings->Draw("ETS2DataCapture settings");
 		
-		if (ImGui::Begin("ETS2DataCapture settings")) {
-			ImGui::SameLine();
-			ImGui::Text("Total frames captured: %d", totalFramesCaptured);
-			ImGui::End();
-		}
-
-
-		if (appSettings->hasChanged())
-		{
-			PLOGD << "Settings changed";
-			updateSettings();
-		}
-
-		ImGui::EndFrame();
-		ImGui::Render();
-		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+	if (ImGui::Begin("ETS2DataCapture settings")) {
+		ImGui::SameLine();
+		ImGui::Text("Total frames captured: %d", stats.total_frames);
+		ImGui::End();
 	}
+
+	if (appSettings->hasChanged())
+	{
+		PLOGD << "Settings changed";
+		updateSettings();
+	}
+
+	ImGui::EndFrame();
+	ImGui::Render();
+	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
 
 void ETS2Hook::shutdownImGui()
@@ -168,17 +179,9 @@ LRESULT CALLBACK ETS2Hook::hWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 {
 	switch (uMsg) {
 		case WM_KEYDOWN: {
-			// std::wcout << "Key pressed " << wParam << std::endl;
 			if (wParam == 0xDC && GetKeyState(VK_CONTROL) & 0x8000) {
 				std::wcout << "Setting drawEnabled to " << !imGuiDrawEnabled << std::endl;
 				imGuiDrawEnabled = !imGuiDrawEnabled;
-
-				if (imGuiDrawEnabled) {
-					startRawInputCapture();
-				}
-				else {
-					endRawInputCapture();
-				}
 			}
 			break;
 		}
@@ -203,6 +206,7 @@ LRESULT CALLBACK ETS2Hook::hWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 			if (raw->header.dwType == RIM_TYPEMOUSE) {
 				if (raw->data.mouse.usButtonFlags)
 					processRawMouse(raw->data.mouse);
+
 				/*
 				TCHAR szTempOutput[MAX_CCH];
 				HRESULT hResult = StringCchPrintf(szTempOutput, MAX_CCH,
@@ -277,9 +281,15 @@ void ETS2Hook::getRawMouseDevice()
 
 void ETS2Hook::startRawInputCapture()
 {
+	if (inputCaptured) {
+		// Already captured
+		return;
+	}
+
 	if (ETS2RidMouse.usUsage != HID_USAGE_GENERIC_MOUSE) {
 		getRawMouseDevice();
 	}
+
 	RAWINPUTDEVICE rid;
 	rid.usUsagePage = HID_USAGE_PAGE_GENERIC;          // HID_USAGE_PAGE_GENERIC
 	rid.usUsage = HID_USAGE_GENERIC_MOUSE;              // HID_USAGE_GENERIC_MOUSE
@@ -295,12 +305,16 @@ void ETS2Hook::startRawInputCapture()
 	}
 	else {
 		std::cout << "Raw input mouse device registered" << std::endl;
+		inputCaptured = true;
 	}
 }
 
 void ETS2Hook::endRawInputCapture()
 {
-	RegisterRawInputDevices(&ETS2RidMouse, 1, sizeof(ETS2RidMouse));
+	if (inputCaptured) {
+		RegisterRawInputDevices(&ETS2RidMouse, 1, sizeof(ETS2RidMouse));
+		inputCaptured = false;
+	}	
 }
 void ETS2Hook::processRawMouse(RAWMOUSE rawMouse)
 {
@@ -333,15 +347,16 @@ void ETS2Hook::processRawMouse(RAWMOUSE rawMouse)
 }
 #pragma endregion
 
-
+#pragma region Snapshotting stuff
 /// <summary>
 /// Takes a screenshot from the current swapChain
 /// </summary>
 /// <param name="pSwapChain"></param>
 /// <param name="fileName">L"C:\\Users\\david\\Documents\\ETS2_CAPTURE\\captures\\screenshot.jpg"</param>
 /// <returns></returns>
-HRESULT ETS2Hook::TakeScreenshot(IDXGISwapChain* pSwapChain, const wchar_t* fileName)
+HRESULT ETS2Hook::TakeScreenshot1(IDXGISwapChain* pSwapChain, const wchar_t* fileName)
 {
+	ID3D11Texture2D* pScreenshotTexture;
 	HRESULT hr = pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pScreenshotTexture);
 	if (FAILED(hr) || pScreenshotTexture == NULL) 
 	{
@@ -349,10 +364,55 @@ HRESULT ETS2Hook::TakeScreenshot(IDXGISwapChain* pSwapChain, const wchar_t* file
 	}
 	else
 	{
-		hr = SaveWICTextureToFile(pDeviceContext, pScreenshotTexture, GUID_ContainerFormatJpeg, fileName);
+		SaveWICTextureToFile(pDeviceContext, pScreenshotTexture, GUID_ContainerFormatJpeg, fileName);
 	}
 
 	return hr;
+}
+
+/// <summary>
+/// Takes a screenshot from the current SwapChain.
+/// Uses a producer-consumer queue to save the file in background, different thread
+/// </summary>
+/// <param name="pSwapChain"></param>
+/// <param name="fileName"></param>
+/// <returns></returns>
+HRESULT ETS2Hook::TakeScreenshot2(IDXGISwapChain* pSwapChain, const wchar_t* fileName)
+{
+	HRESULT hr = pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pScreenshotTexture);
+
+	if (FAILED(hr) || pScreenshotTexture == NULL) {
+		PLOGE << "Error capturing buffer for screenshot to " << fileName;
+	}
+	else
+	{		
+		SnapshotData* data = new SnapshotData();
+		DirectX::ScratchImage* scratchImage = new DirectX::ScratchImage();
+		DirectX::CaptureTexture(pDevice, pDeviceContext, pScreenshotTexture, *scratchImage);
+		
+		data->image = scratchImage;
+		data->frame_stats = stats;
+		data->fileName = std::wstring(fileName);
+		queue.enqueue(data);
+	}
+
+	return hr;
+}
+
+void ETS2Hook::saveBuffer()
+{
+	SnapshotData* data;
+
+	while (true) {
+		if (capturing) {
+			if (queue.try_dequeue(data)) {
+				const Image* image = data->image->GetImage(0, 0, 0);
+				DirectX::SaveToWICFile(*image, WIC_FLAGS_NONE, GUID_ContainerFormatJpeg, data->fileName.c_str());
+				PLOGD << "Dequeed frame: " << data->fileName;				
+				delete data;
+			}
+		}
+	}
 }
 
 void ETS2Hook::updateSettings()
@@ -362,44 +422,68 @@ void ETS2Hook::updateSettings()
 	secondsBetweenCaptures = appSettings->secondsBetweenSnapshots;
 	ets2dc_config::set(ets2dc_config_keys::seconds_between_captures, secondsBetweenCaptures);	
 	capturing = appSettings->isCapturing;
+	simulate = appSettings->simulate;
 
 	plog::get()->setMaxSeverity(plog::Severity(appSettings->currentLogLevel));
 	PLOGD << "Capturing set to: " << capturing;
+
+	formatString = fmt::format(fmtFile,
+		fmt::arg(L"imageFolder", imageFolder),
+		fmt::arg(L"fileName", imageFileName),
+		fmt::arg(L"fileFormat", imageFileFormat));
 }
 
 HRESULT ETS2Hook::Present(IDXGISwapChain* swapChain)
 {
+	static std::chrono::high_resolution_clock::time_point timer = std::chrono::high_resolution_clock::now();
+	static std::wstring fileName;
+
+	// auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - timer);
+	std::chrono::duration<float> delta = std::chrono::high_resolution_clock::now() - timer;
+
 	if (capturing && !ets2dc_telemetry::output_paused) {
-		if (frame < consecutiveFramesCapture) {
-			std::wstringstream imageFile;
-			imageFile << imageFolder << L"\\" << imageFileName << totalFramesCaptured << L"." << imageFileFormat;
+		if (delta.count() >= (1.0f / consecutiveFramesCapture)) {			
+			stats.snapshot_time = std::chrono::system_clock::now();
+
+			try {
+				fileName = stats.formatted(formatString);
+			}
+			catch (const std::exception& e) {
+				PLOGE << "Error trying to format file name variables: " << e.what();
+				fileName = stats.formatted(defaultFileName);
+			}
+
+			if (!simulate) {
+				TakeScreenshot2(swapChain, fileName.c_str());
+			}
 			
-			std::wstring fileName = imageFile.str();		
-			TakeScreenshot(swapChain, fileName.c_str());
+			PLOGD << L"Saved ETS2 snapshot to " << fileName << " : " << delta.count();
+			stats.frame++;
+			stats.total_frames++;
 
-			frame++;
-			totalFramesCaptured++;
+			timer = std::chrono::high_resolution_clock::now();
+		}		
 
-			PLOGV << L"Saved ETS2 frame " << frame << " to " << fileName;
-		}
-
-		if ((clock() - timer) / CLOCKS_PER_SEC >= secondsBetweenCaptures) {
-			timer = clock();
-			frame = 0;
-		}
+		PLOGV << "Time elapsed: " << delta.count();
 	}
 	else {
-		static time_t timer2 = clock();
+		if (imGuiDrawEnabled) {
+			startRawInputCapture();
 
-		if ((clock() - timer2) / CLOCKS_PER_SEC >= 5) {
-			PLOGV << "Rendering ImGui - output_paused: " << ets2dc_telemetry::output_paused;
-			timer2 = clock();
+			static time_t timer2 = clock();
+			if ((clock() - timer2) / CLOCKS_PER_SEC >= 5) {
+				PLOGV << "Rendering ImGui - output_paused: " << ets2dc_telemetry::output_paused;
+				timer2 = clock();
+			}
+
+			renderImGui();
+			stats.frame = 0;
 		}
-
-		renderImGui();
-		timer = clock();
-		frame = 0;
+		else {
+			endRawInputCapture();
+		}
 	}
 
 	return S_OK;
 }
+#pragma endregion

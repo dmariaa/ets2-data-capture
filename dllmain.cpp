@@ -13,13 +13,14 @@
 #include "scs_sdk_1_12/include/eurotrucks2/scssdk_telemetry_eut2.h"
 
 #include "kiero/kiero.h"
+
 #include "ETS2Hook.h"
 
 #include "config.h"
 #include "ets2dc_imgui.h"
 #include "ets2dc_telemetry.h"
 
-ETS2Hook* hook;
+ETS2Hook* hook = nullptr;
 
 // Create the type of function that we will hook
 typedef long(__stdcall* Present)(IDXGISwapChain*, UINT, UINT);
@@ -31,13 +32,17 @@ static Present oPresent = NULL;
 
 HRESULT __stdcall hkPresent11(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
-    hook->Init(pSwapChain);    
-    hook->Present(pSwapChain);
+    if(hook != nullptr) 
+    { 
+        hook->Init(pSwapChain);
+        hook->Present(pSwapChain);
+    }
 
     return oPresent(pSwapChain, SyncInterval, Flags);
 }
 
 static bool log_initialized = false;
+static bool init_hook = false;
 
 /// <summary>
 /// Global shutdown callback for Euro Truck Simulator 2 Telemetry SDK
@@ -65,23 +70,34 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
     if (result != SCS_RESULT_ok) {
         return result;
     }
-
     	
-    PLOGI << "Initializing hook";
-    hook = new ETS2Hook();
-
-    PLOGI << "Hooking DX11 Present";
-    bool init_hook = false;
+    PLOGI << "Hooking DX11 Present";    
     do
     {
-        if (kiero::init(kiero::RenderType::D3D11) == kiero::Status::Success)
+        kiero::Status::Enum status = kiero::init(kiero::RenderType::D3D11);
+        
+        if (status == kiero::Status::NotSupportedError) {
+            PLOGE << "Kiero DX11 Not supported, check kiero.h, DX11 not hooked";
+            break;
+        }
+
+        if (status == kiero::Status::Success)
         {
-            kiero::bind(8, (void**)&oPresent, hkPresent11);
+            status = kiero::bind(8, (void**)&oPresent, hkPresent11);
+            
+            if (status != kiero::Status::Success) {
+                PLOGE << "DX11 present not hooked.";
+                break;
+            }
+
             init_hook = true;
+            PLOGI << "DX11 Present successfully hooked";
+
+            PLOGI << "Initializing hook";
+            hook = new ETS2Hook();
         }
     } while (!init_hook);
-    PLOGI << "DX11 Present successfully hooked";
-
+    
     return SCS_RESULT_ok;    
 }
 
@@ -92,11 +108,15 @@ SCSAPI_VOID scs_telemetry_shutdown(void)
 {
     // Any cleanup needed. The registrations will be removed automatically
     // so there is no need to do that manually.
-    delete hook;
-
-    PLOGI << "Removing DX11 Present hook";
-    kiero::unbind(8);
-    kiero::shutdown();
+    if (hook != nullptr) {
+        delete hook;
+    }
+    
+    if (init_hook) {
+        PLOGI << "Removing DX11 Present hook";
+        kiero::unbind(8);
+        kiero::shutdown();
+    }
     
     // FreeConsole();
     PLOGI << "DLL Unloaded";
