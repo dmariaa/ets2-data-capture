@@ -1,16 +1,21 @@
 #pragma once
 
 #include <cstdio>
-#include <ctime>
 #include <string>
 #include <iostream>
 #include <sstream>
-
+#include <chrono>
+#include <thread>
+#include <date/date.h>
 #include <Windows.h>
 
 #include <d3d11.h>
-#include <ScreenGrab.h>
 #pragma comment(lib, "d3d11.lib")
+
+#include <DirectXTex.h>
+#pragma comment(lib, "DirectXTex.lib")
+
+#include <ScreenGrab.h>
 #pragma comment(lib, "DirectXTK.lib")
 
 //#define DIRECTINPUT_VERSION 0x0800

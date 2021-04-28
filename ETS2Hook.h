@@ -1,26 +1,42 @@
 #pragma once
 #include "globals.h"
 
+#include "readerwriterqueue/readerwriterqueue.h"
+
 #include <sstream>
 
 class Config;
 class AppSettings;
+
+class SnapshotData 
+{
+public:
+	DirectX::ScratchImage* image;
+	snapshot_stats frame_stats;	
+	std::wstring fileName;
+
+	~SnapshotData()
+	{
+		image->Release();
+	}
+};
 
 /// <summary>
 /// Hook class for Euro Truck Simulator 2
 /// </summary>
 class ETS2Hook
 {
+	static const wchar_t* fmtFile;
+
 	// Pointers to useful objects
 	ID3D11Device* pDevice;
-	ID3D11DeviceContext* pDeviceContext;
+	ID3D11DeviceContext* pDeviceContext;	
 	ID3D11Texture2D* pScreenshotTexture;
 	HWND outputWindow;
 
-	bool capturing;
-	int totalFramesCaptured;
-	int frame;
-	clock_t timer;
+	bool inputCaptured;
+	std::atomic<bool> capturing;
+	snapshot_stats stats;	
 
 	// Configuration vars
 	int consecutiveFramesCapture;
@@ -57,12 +73,18 @@ class ETS2Hook
 	LRESULT CALLBACK mouseHook(int nCode, WPARAM wParam, LPARAM lParam);
 
 	// Some util functions
-	HRESULT TakeScreenshot(IDXGISwapChain* swapChain, const wchar_t* fileName);
+	HRESULT TakeScreenshot1(IDXGISwapChain* swapChain, const wchar_t* fileName);
+	HRESULT TakeScreenshot2(IDXGISwapChain* swapChain, const wchar_t* fileName);
 
 	// Settings change update
 	void updateSettings();
-
 	AppSettings* appSettings;
+
+	// Writing thread
+	moodycamel::ReaderWriterQueue<SnapshotData*> queue;
+	std::atomic_bool captureThreadRunning;
+	void saveBuffer();
+
 public:
 	ETS2Hook();	
 	~ETS2Hook();

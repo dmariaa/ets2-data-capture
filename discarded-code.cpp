@@ -136,3 +136,71 @@ HRESULT ETS2Hook::TakeScreenshot(IDXGISwapChain* pSwapChain, const wchar_t* file
 	return hr;
 }
 #pragma endregion
+
+#pragma region old_present
+HRESULT ETS2Hook::Present(IDXGISwapChain* swapChain)
+{
+	static std::chrono::system_clock::time_point timer = std::chrono::system_clock::now();
+	static std::wstring fileName;
+
+	auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - timer);
+
+	if (capturing && !ets2dc_telemetry::output_paused) {
+		if (stats.frame < consecutiveFramesCapture) {
+			stats.snapshot_time = std::chrono::system_clock::now();
+
+			try {
+				fileName = stats.formatted(imageFileName);
+			}
+			catch (const std::exception& e) {
+				PLOGE << "Error trying to format file name variables: " << e.what();
+				fileName = stats.formatted(defaultFileName);
+			}
+
+			std::wstring imageFile = fmt::format(fmtFile,
+				fmt::arg(L"imageFolder", imageFolder),
+				fmt::arg(L"fileName", fileName),
+				fmt::arg(L"fileFormat", imageFileFormat));
+
+			//std::wstringstream imageFile;
+			//imageFile << imageFolder << L"\\" << "file-" << stats.total_frames << L"." << "png";
+
+			//std::wstring fileName = imageFile.str();
+			// std::thread(&ETS2Hook::TakeScreenshot1, this, swapChain, imageFile.c_str()).detach();
+
+			TakeScreenshot1(swapChain, imageFile.c_str());
+
+			PLOGD << L"Saved ETS2 snapshot to " << fileName;
+			stats.frame++;
+			stats.total_frames++;
+		}
+		else {
+			if (elapsed_time.count() >= secondsBetweenCaptures) {
+				timer = std::chrono::system_clock::now();
+				stats.frame = 0;
+				stats.snapshot++;
+			}
+		}
+	}
+	else {
+		if (imGuiDrawEnabled) {
+			startRawInputCapture();
+
+			static time_t timer2 = clock();
+			if ((clock() - timer2) / CLOCKS_PER_SEC >= 5) {
+				PLOGV << "Rendering ImGui - output_paused: " << ets2dc_telemetry::output_paused;
+				timer2 = clock();
+			}
+
+			renderImGui();
+			timer = std::chrono::system_clock::now();
+			stats.frame = 0;
+		}
+		else {
+			endRawInputCapture();
+		}
+	}
+
+	return S_OK;
+}
+#pragma endregion

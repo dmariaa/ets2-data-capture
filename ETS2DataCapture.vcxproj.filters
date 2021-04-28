@@ -9,10 +9,6 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
     </Filter>
-    <Filter Include="Resource Files">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
     <Filter Include="kiero">
       <UniqueIdentifier>{749c590c-3dc1-492a-a6b0-91497e0177c6}</UniqueIdentifier>
     </Filter>
@@ -45,6 +41,9 @@
     </Filter>
     <Filter Include="dinput8_hook\minhook\hde">
       <UniqueIdentifier>{b471d84f-98ac-4041-94e9-ea6b049719d6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="readerwriterqueue">
+      <UniqueIdentifier>{b236b18d-67aa-448a-95c9-a388dec60d22}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -191,6 +190,9 @@
     </ClInclude>
     <ClInclude Include="ets2dc_telemetry.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="readerwriterqueue\readerwriterqueue.h">
+      <Filter>readerwriterqueue</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
