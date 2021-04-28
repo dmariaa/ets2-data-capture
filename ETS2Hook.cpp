@@ -32,7 +32,7 @@ static const wchar_t* defaultFileName = L"snapshot-{unix-timestamp}-{snapshot}-{
 WNDPROC ETS2Hook::ETS2_hWndProc = nullptr;
 ETS2Hook* ETS2Hook::pThis = nullptr;
 
-ETS2Hook::ETS2Hook() : capturing(false), inputCaptured(false), queue(100)
+ETS2Hook::ETS2Hook() : capturing(false), simulate(false), inputCaptured(false), queue(100)
 {
 	imageFolder = ets2dc_config::get(ets2dc_config_keys::image_folder, L"images");
 	imageFileFormat = ets2dc_config::get(ets2dc_config_keys::image_file_format, L"jpg");
@@ -47,6 +47,11 @@ ETS2Hook::ETS2Hook() : capturing(false), inputCaptured(false), queue(100)
 	PLOGI << "Consecutive frames: " << consecutiveFramesCapture;
 	PLOGI << "Seconds Between Captures: " << secondsBetweenCaptures;
 	PLOGI << "----------------------------------------------";
+
+	formatString = fmt::format(fmtFile,
+		fmt::arg(L"imageFolder", imageFolder),
+		fmt::arg(L"fileName", imageFileName),
+		fmt::arg(L"fileFormat", imageFileFormat));
 
 	appSettings = new AppSettings();
 }
@@ -201,6 +206,7 @@ LRESULT CALLBACK ETS2Hook::hWndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
 			if (raw->header.dwType == RIM_TYPEMOUSE) {
 				if (raw->data.mouse.usButtonFlags)
 					processRawMouse(raw->data.mouse);
+
 				/*
 				TCHAR szTempOutput[MAX_CCH];
 				HRESULT hResult = StringCchPrintf(szTempOutput, MAX_CCH,
@@ -341,7 +347,7 @@ void ETS2Hook::processRawMouse(RAWMOUSE rawMouse)
 }
 #pragma endregion
 
-
+#pragma region Snapshotting stuff
 /// <summary>
 /// Takes a screenshot from the current swapChain
 /// </summary>
@@ -358,12 +364,19 @@ HRESULT ETS2Hook::TakeScreenshot1(IDXGISwapChain* pSwapChain, const wchar_t* fil
 	}
 	else
 	{
-		SaveWICTextureToFile(pDeviceContext, pScreenshotTexture, GUID_ContainerFormatPng, fileName);
+		SaveWICTextureToFile(pDeviceContext, pScreenshotTexture, GUID_ContainerFormatJpeg, fileName);
 	}
 
 	return hr;
 }
 
+/// <summary>
+/// Takes a screenshot from the current SwapChain.
+/// Uses a producer-consumer queue to save the file in background, different thread
+/// </summary>
+/// <param name="pSwapChain"></param>
+/// <param name="fileName"></param>
+/// <returns></returns>
 HRESULT ETS2Hook::TakeScreenshot2(IDXGISwapChain* pSwapChain, const wchar_t* fileName)
 {
 	HRESULT hr = pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pScreenshotTexture);
@@ -377,18 +390,10 @@ HRESULT ETS2Hook::TakeScreenshot2(IDXGISwapChain* pSwapChain, const wchar_t* fil
 		DirectX::ScratchImage* scratchImage = new DirectX::ScratchImage();
 		DirectX::CaptureTexture(pDevice, pDeviceContext, pScreenshotTexture, *scratchImage);
 		
-		// const Image* image = img.GetImage(0, 0, 0);
-		// DirectX::Blob blob;
-		// DirectX::SaveToWICMemory(*image, WIC_FLAGS_NONE, GUID_ContainerFormatPng, blob, 
-		// &GUID_WICPixelFormat24bppBGR);
-
 		data->image = scratchImage;
 		data->frame_stats = stats;
 		data->fileName = std::wstring(fileName);
 		queue.enqueue(data);
-
-		// img.Release();
-
 	}
 
 	return hr;
@@ -402,15 +407,13 @@ void ETS2Hook::saveBuffer()
 		if (capturing) {
 			if (queue.try_dequeue(data)) {
 				const Image* image = data->image->GetImage(0, 0, 0);
-				DirectX::SaveToWICFile(*image, WIC_FLAGS_NONE, GUID_ContainerFormatPng, data->fileName.c_str(), &GUID_WICPixelFormat24bppBGR);
-				PLOGD << "Dequeed frame: " << data->fileName;
-				
+				DirectX::SaveToWICFile(*image, WIC_FLAGS_NONE, GUID_ContainerFormatJpeg, data->fileName.c_str());
+				PLOGD << "Dequeed frame: " << data->fileName;				
 				delete data;
 			}
 		}
 	}
 }
-
 
 void ETS2Hook::updateSettings()
 {
@@ -419,9 +422,15 @@ void ETS2Hook::updateSettings()
 	secondsBetweenCaptures = appSettings->secondsBetweenSnapshots;
 	ets2dc_config::set(ets2dc_config_keys::seconds_between_captures, secondsBetweenCaptures);	
 	capturing = appSettings->isCapturing;
+	simulate = appSettings->simulate;
 
 	plog::get()->setMaxSeverity(plog::Severity(appSettings->currentLogLevel));
 	PLOGD << "Capturing set to: " << capturing;
+
+	formatString = fmt::format(fmtFile,
+		fmt::arg(L"imageFolder", imageFolder),
+		fmt::arg(L"fileName", imageFileName),
+		fmt::arg(L"fileFormat", imageFileFormat));
 }
 
 HRESULT ETS2Hook::Present(IDXGISwapChain* swapChain)
@@ -437,20 +446,17 @@ HRESULT ETS2Hook::Present(IDXGISwapChain* swapChain)
 			stats.snapshot_time = std::chrono::system_clock::now();
 
 			try {
-				fileName = stats.formatted(imageFileName);
+				fileName = stats.formatted(formatString);
 			}
 			catch (const std::exception& e) {
 				PLOGE << "Error trying to format file name variables: " << e.what();
 				fileName = stats.formatted(defaultFileName);
 			}
 
-			std::wstring imageFile = fmt::format(fmtFile,
-				fmt::arg(L"imageFolder", imageFolder),
-				fmt::arg(L"fileName", fileName),
-				fmt::arg(L"fileFormat", imageFileFormat));
-
-			TakeScreenshot2(swapChain, imageFile.c_str());
-
+			if (!simulate) {
+				TakeScreenshot2(swapChain, fileName.c_str());
+			}
+			
 			PLOGD << L"Saved ETS2 snapshot to " << fileName << " : " << delta.count();
 			stats.frame++;
 			stats.total_frames++;
@@ -480,3 +486,4 @@ HRESULT ETS2Hook::Present(IDXGISwapChain* swapChain)
 
 	return S_OK;
 }
+#pragma endregion

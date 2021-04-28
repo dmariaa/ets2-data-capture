@@ -34,9 +34,11 @@ class ETS2Hook
 	ID3D11Texture2D* pScreenshotTexture;
 	HWND outputWindow;
 
+	bool simulate;
 	bool inputCaptured;
 	std::atomic<bool> capturing;
 	snapshot_stats stats;	
+
 
 	// Configuration vars
 	int consecutiveFramesCapture;
@@ -44,6 +46,7 @@ class ETS2Hook
 	std::wstring imageFolder;
 	std::wstring imageFileFormat;
 	std::wstring imageFileName;	
+	std::wstring formatString;
 
 	// ImGui Stuff	
 	bool imGuiDrawEnabled;
