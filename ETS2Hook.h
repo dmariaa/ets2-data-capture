@@ -1,8 +1,6 @@
 #pragma once
 #include "globals.h"
-
 #include "readerwriterqueue/readerwriterqueue.h"
-
 #include <sstream>
 
 class Config;
@@ -11,13 +9,16 @@ class AppSettings;
 class SnapshotData 
 {
 public:
-	DirectX::ScratchImage* image;
+	TextureBuffer* image;
+	TextureBuffer* depth;
+
 	snapshot_stats frame_stats;	
 	std::wstring fileName;
 
 	~SnapshotData()
 	{
-		image->Release();
+		if (image != nullptr) delete image;
+		if (depth != nullptr) delete depth;
 	}
 };
 
@@ -29,9 +30,10 @@ class ETS2Hook
 	static const wchar_t* fmtFile;
 
 	// Pointers to useful objects
-	ID3D11Device* pDevice;
-	ID3D11DeviceContext* pDeviceContext;	
-	ID3D11Texture2D* pScreenshotTexture;
+	ID3D11Device* pDevice = nullptr;
+	ID3D11DeviceContext* pDeviceContext = nullptr;	
+	ID3D11Texture2D* pScreenshotTexture = nullptr;
+	ID3D11Texture2D* pDepthTexture = nullptr;
 	HWND outputWindow;
 
 	bool simulate;
@@ -43,6 +45,8 @@ class ETS2Hook
 	// Configuration vars
 	int consecutiveFramesCapture;
 	int secondsBetweenCaptures; 	
+	bool captureDepth;
+	bool captureTelemetry;
 	std::wstring imageFolder;
 	std::wstring imageFileFormat;
 	std::wstring imageFileName;	
@@ -85,12 +89,15 @@ class ETS2Hook
 
 	// Writing thread
 	moodycamel::ReaderWriterQueue<SnapshotData*> queue;
-	std::atomic_bool captureThreadRunning;
+	std::atomic_bool captureThreadRunning = true;
 	void saveBuffer();
 
+	void saveDepthTexture(std::wstring fileName);
 public:
-	ETS2Hook();	
+	ETS2Hook();
 	~ETS2Hook();
+
+	bool Initialized;
 
 	/// <summary>
 	/// Called to initialize usefull DX11 stuff
@@ -104,6 +111,15 @@ public:
 	/// </summary>
 	/// <param name="swapChain"></param>
 	/// <returns></returns>
-	HRESULT Present(IDXGISwapChain* swapChain);	
+	HRESULT PresentHook(Present oPresent, IDXGISwapChain* swapChain, UINT SyncInterval, UINT Flags);
+
+	/// <summary>
+	/// Called before draw
+	/// </summary>
+	/// <param name="VertexCount"></param>
+	/// <param name="StartVertexLocation"></param>
+	void DrawHook(Draw oDraw, ID3D11DeviceContext* context, UINT VertexCount, UINT StartVertexLocation);
+
+	HRESULT CreateTexture2DHook(CreateTexture2D oCreateTexture2D, ID3D11Device* device, D3D11_TEXTURE2D_DESC* pDesc, D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D);
 };
 

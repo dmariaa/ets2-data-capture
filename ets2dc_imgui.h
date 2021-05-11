@@ -41,12 +41,15 @@ class AppSettings {
     bool showImgGuiDemo = false;    
 
     bool changed = false;
+    //void ToggleButton(const char* str_id, bool* v);
 public:
     bool simulate;
     bool isCapturing = false;
     int currentLogLevel = 0;
     int consecutiveFrames = 1;
     int secondsBetweenSnapshots = 1;
+    bool captureDepth = true;
+    bool captureTelemetry = true;
 
     AppSettings();
     void Draw(const char* windowName = "ETS2DataCapture settings");

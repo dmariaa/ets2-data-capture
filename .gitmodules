@@ -4,6 +4,7 @@
 [submodule "kiero"]
 	path = kiero
 	url = https://github.com/Rebzzel/kiero.git
+	ignore = dirty
 [submodule "fmt"]
 	path = fmt
 	url = https://github.com/fmtlib/fmt.git

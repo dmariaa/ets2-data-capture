@@ -11,6 +11,8 @@
 #include <ShlObj_core.h>
 #include <Shlwapi.h>
 
+#include <d3d11.h>
+
 struct snapshot_stats {
 	std::chrono::system_clock::time_point start;
 	std::chrono::system_clock::time_point snapshot_time;
@@ -55,6 +57,8 @@ namespace ets2dc_config_keys {
 	constexpr const char* image_file_format = "ImagefileFormat";
 	constexpr const char* log_level = "LogLevel";
 	constexpr const char* seconds_between_captures = "SecondsBetweenCaptures";
+	constexpr const char* capture_depth = "CaptureDepth";
+	constexpr const char* capture_telemtry = "CaptureTelemetry";
 }
 
 /// <summary>
@@ -62,9 +66,6 @@ namespace ets2dc_config_keys {
 /// </summary>
 namespace ets2dc_utils
 {
-	constexpr wchar_t PATH_SEPARATOR[] = L"\\";
-	constexpr wchar_t appFolder[] = L"ETS2DataCapture";
-
 	static std::vector<std::string> logLevels = { "none", "fatal", "error", "warning", "info", "debug", "verbose" };
 
 	/// <summary>
@@ -73,38 +74,33 @@ namespace ets2dc_utils
 	/// </summary>
 	/// <param name="logLevel">One of valid values</param>
 	/// <returns>log level as integer</returns>
-	inline int logLevelFromString(std::string logLevel)
-	{
-		auto it = std::find(logLevels.begin(), logLevels.end(), logLevel);
-		if (it == logLevels.end()) return -1;
-		return (int)std::distance(logLevels.begin(), it);
-	}
+	int logLevelFromString(std::string logLevel);
 
 	/// <summary>
 	/// Returns windows user Documents folder
 	/// </summary>
 	/// <returns>Windows User Documents path</returns>
-	inline std::wstring getDocumentsFolder()
-	{
-		PWSTR documentsPath;
-		HRESULT hr = SHGetKnownFolderPath(FOLDERID_Documents, 0, NULL, &documentsPath);
-		std::wstring dp(documentsPath);
-		CoTaskMemFree(documentsPath);
-		return dp;
-	}
+	std::wstring getDocumentsFolder();
 
 	/// <summary>
 	/// Returns project data folder, as a string.
 	/// Creates folder if needed.
 	/// </summary>
 	/// <returns>Project data folder</returns>
-	inline std::wstring getProjectDataFolder()
-	{
-		std::wstring projectData = getDocumentsFolder() + PATH_SEPARATOR + appFolder + PATH_SEPARATOR;
-		if(!PathIsDirectoryW(projectData.c_str()))
-		{
-			CreateDirectory(projectData.c_str(), NULL);
-		}
-		return projectData;
-	}
+	std::wstring getProjectDataFolder();
+
+	/// <summary>
+	/// Generates error description from hresult
+	/// Extracted from https://github.com/microsoft/DirectXTex
+	/// </summary>
+	/// <param name="hr"></param>
+	/// <returns></returns>
+	const wchar_t* GetErrorDesc(HRESULT hr);
+
+	/// <summary>
+	/// Dumps texture data to string for debugging
+	/// </summary>
+	/// <param name="texture"></param>
+	/// <returns></returns>
+	const std::wstring DumptTextureData(ID3D11Texture2D* texture);
 }

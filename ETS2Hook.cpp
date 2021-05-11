@@ -6,6 +6,10 @@
 #include <hidusage.h>
 #include <strsafe.h>
 #include <chrono>
+#include <string>
+#include <locale>
+#include <codecvt>
+
 
 #define FMT_HEADER_ONLY
 #include <fmt/format.h>
@@ -20,19 +24,17 @@
 
 #define MAX_CCH 256
 
-
-using namespace DirectX;
 using namespace Microsoft::WRL;
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-const wchar_t* ETS2Hook::fmtFile = L"{imageFolder}\\{fileName}.{fileFormat}";
+const wchar_t* ETS2Hook::fmtFile = L"{imageFolder}\\{fileName}";
 static const wchar_t* defaultFileName = L"snapshot-{unix-timestamp}-{snapshot}-{frame}";
 
 WNDPROC ETS2Hook::ETS2_hWndProc = nullptr;
 ETS2Hook* ETS2Hook::pThis = nullptr;
 
-ETS2Hook::ETS2Hook() : capturing(false), simulate(false), inputCaptured(false), queue(100)
+ETS2Hook::ETS2Hook() : Initialized(false), capturing(false), simulate(false), inputCaptured(false), queue(100)
 {
 	imageFolder = ets2dc_config::get(ets2dc_config_keys::image_folder, L"images");
 	imageFileFormat = ets2dc_config::get(ets2dc_config_keys::image_file_format, L"jpg");
@@ -50,14 +52,16 @@ ETS2Hook::ETS2Hook() : capturing(false), simulate(false), inputCaptured(false), 
 
 	formatString = fmt::format(fmtFile,
 		fmt::arg(L"imageFolder", imageFolder),
-		fmt::arg(L"fileName", imageFileName),
-		fmt::arg(L"fileFormat", imageFileFormat));
+		fmt::arg(L"fileName", imageFileName));
 
 	appSettings = new AppSettings();
 }
 
 ETS2Hook::~ETS2Hook()
 {
+	capturing = false;
+	captureThreadRunning = false;
+
 	shutdownImGui();
 	shutdownInput();
 
@@ -78,11 +82,14 @@ HRESULT ETS2Hook::Init(IDXGISwapChain* pSwapChain)
 
 			// Test thread
 			std::thread(&ETS2Hook::saveBuffer, this).detach();
+
+			Initialized = true;
 		}
 	}
 
 	return hr;
 }
+
 
 #pragma region ImGui Stuff
 void ETS2Hook::initImGui(IDXGISwapChain* pSwapChain, ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext)
@@ -347,6 +354,63 @@ void ETS2Hook::processRawMouse(RAWMOUSE rawMouse)
 }
 #pragma endregion
 
+void ETS2Hook::DrawHook(Draw oDraw, ID3D11DeviceContext* context, UINT VertexCount, UINT StartVertexLocation)
+{
+	static int counter = 0;
+
+	oDraw(context, VertexCount, StartVertexLocation);
+
+	if (capturing && !ets2dc_telemetry::output_paused)
+	{
+		ID3D11RenderTargetView* renderTargetView = nullptr;
+		ID3D11DepthStencilView* depthStencilView = nullptr;
+		context->OMGetRenderTargets(1, &renderTargetView, &depthStencilView);
+
+		if (depthStencilView != nullptr && renderTargetView != nullptr)
+		{
+			ID3D11Resource* res = nullptr;
+			renderTargetView->GetResource(&res);
+
+			if (res != nullptr)
+			{
+				pScreenshotTexture = nullptr;
+				res->QueryInterface(&pScreenshotTexture);
+				res->Release();
+			}
+
+			renderTargetView->Release();
+
+			res = nullptr;
+			depthStencilView->GetResource(&res);
+
+			if (res != nullptr)
+			{
+				pDepthTexture = nullptr;
+				res->QueryInterface(&pDepthTexture);
+				res->Release();
+			}
+
+			depthStencilView->Release();
+		}
+	}
+}
+
+HRESULT ETS2Hook::CreateTexture2DHook(CreateTexture2D oCreateTexture2D, ID3D11Device* device, D3D11_TEXTURE2D_DESC* pDesc, D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
+{
+	PLOGV << "Create Texture 2D called";
+
+	HRESULT result = oCreateTexture2D(device, pDesc, pInitialData, ppTexture2D);
+
+	if (!FAILED(result) && *ppTexture2D != nullptr && pDesc->BindFlags == D3D11_BIND_DEPTH_STENCIL)
+	{
+		PLOGD << "---------------------------------------------------" << std::endl
+			<< "Depth texture created " << std::endl 
+			<< ets2dc_utils::DumptTextureData(*ppTexture2D);
+	}	
+
+	return result;
+}
+
 #pragma region Snapshotting stuff
 /// <summary>
 /// Takes a screenshot from the current swapChain
@@ -358,15 +422,21 @@ HRESULT ETS2Hook::TakeScreenshot1(IDXGISwapChain* pSwapChain, const wchar_t* fil
 {
 	ID3D11Texture2D* pScreenshotTexture;
 	HRESULT hr = pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pScreenshotTexture);
+	
 	if (FAILED(hr) || pScreenshotTexture == NULL) 
 	{
 		PLOGE << "Error capturing buffer for screenshot to " << fileName;
 	}
 	else
 	{
-		SaveWICTextureToFile(pDeviceContext, pScreenshotTexture, GUID_ContainerFormatJpeg, fileName);
-	}
+		std::string fname;
+		std::wstring_convert<std::codecvt_utf8<wchar_t>> conv1;
+		fname = conv1.to_bytes(fileName);
 
+		TextureBuffer* texture = new TextureBuffer(pDevice, pDeviceContext, pScreenshotTexture);
+		texture->save(fname.c_str());
+	}
+		
 	return hr;
 }
 
@@ -379,36 +449,73 @@ HRESULT ETS2Hook::TakeScreenshot1(IDXGISwapChain* pSwapChain, const wchar_t* fil
 /// <returns></returns>
 HRESULT ETS2Hook::TakeScreenshot2(IDXGISwapChain* pSwapChain, const wchar_t* fileName)
 {
-	HRESULT hr = pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pScreenshotTexture);
+	HRESULT hr;
+	bool capture = false;
 
-	if (FAILED(hr) || pScreenshotTexture == NULL) {
-		PLOGE << "Error capturing buffer for screenshot to " << fileName;
-	}
-	else
+	SnapshotData* data = new SnapshotData();
+	data->fileName = fileName;
+	data->frame_stats = stats;
+
+	if (pScreenshotTexture != nullptr)
 	{		
-		SnapshotData* data = new SnapshotData();
-		DirectX::ScratchImage* scratchImage = new DirectX::ScratchImage();
-		DirectX::CaptureTexture(pDevice, pDeviceContext, pScreenshotTexture, *scratchImage);
-		
-		data->image = scratchImage;
-		data->frame_stats = stats;
-		data->fileName = std::wstring(fileName);
-		queue.enqueue(data);
+		PLOGV << "Screenshot texture: \n" << ets2dc_utils::DumptTextureData(pScreenshotTexture);
+		TextureBuffer* buffer = new TextureBuffer(pDevice, pDeviceContext, pScreenshotTexture);
+
+		if (buffer->type == TextureBuffer::Type::ScreenShot)
+		{
+			data->image = buffer;
+			capture = true;
+		}
 	}
 
-	return hr;
+	if (pDepthTexture != nullptr && captureDepth)
+	{
+		PLOGV << "Depth texture: \n" << ets2dc_utils::DumptTextureData(pDepthTexture);
+		TextureBuffer* buffer = new TextureBuffer(pDevice, pDeviceContext, pDepthTexture);
+
+		if (buffer->type == TextureBuffer::Type::Depth)
+		{
+			data->depth = buffer;
+			capture = true;
+		}	
+	}
+
+	if (capture)
+	{
+		queue.enqueue(data);
+		return S_OK;
+	}
+	else {
+		return E_FAIL;
+	}
+	
+
+	return S_OK;
 }
 
 void ETS2Hook::saveBuffer()
 {
 	SnapshotData* data;
+	HRESULT result;
 
-	while (true) {
+	while (captureThreadRunning) {
 		if (capturing) {
 			if (queue.try_dequeue(data)) {
-				const Image* image = data->image->GetImage(0, 0, 0);
-				DirectX::SaveToWICFile(*image, WIC_FLAGS_NONE, GUID_ContainerFormatJpeg, data->fileName.c_str());
-				PLOGD << "Dequeed frame: " << data->fileName;				
+				std::wstring_convert<std::codecvt_utf8<wchar_t>> conv1;
+				std::string fname;
+				fname = conv1.to_bytes(data->fileName);
+
+				if (data->image != nullptr)
+				{
+					data->image->save(fname.c_str());
+				}
+
+				if (data->depth != nullptr)
+				{
+					data->depth->save(fname.c_str());
+				}
+
+				PLOGD << "Dequeed frame: " << data->fileName;
 				delete data;
 			}
 		}
@@ -419,8 +526,16 @@ void ETS2Hook::updateSettings()
 {
 	consecutiveFramesCapture = appSettings->consecutiveFrames; 
 	ets2dc_config::set(ets2dc_config_keys::consecutive_frames, consecutiveFramesCapture);
+	
 	secondsBetweenCaptures = appSettings->secondsBetweenSnapshots;
-	ets2dc_config::set(ets2dc_config_keys::seconds_between_captures, secondsBetweenCaptures);	
+	ets2dc_config::set(ets2dc_config_keys::seconds_between_captures, secondsBetweenCaptures);
+
+	captureDepth = appSettings->captureDepth;
+	ets2dc_config::set(ets2dc_config_keys::capture_depth, captureDepth);
+
+	captureTelemetry = appSettings->captureTelemetry;
+	ets2dc_config::set(ets2dc_config_keys::capture_telemtry, captureTelemetry);
+	
 	capturing = appSettings->isCapturing;
 	simulate = appSettings->simulate;
 
@@ -433,16 +548,27 @@ void ETS2Hook::updateSettings()
 		fmt::arg(L"fileFormat", imageFileFormat));
 }
 
-HRESULT ETS2Hook::Present(IDXGISwapChain* swapChain)
+HRESULT ETS2Hook::PresentHook(Present oPresent, IDXGISwapChain* swapChain, UINT SyncInterval, UINT Flags)
 {
-	static std::chrono::high_resolution_clock::time_point timer = std::chrono::high_resolution_clock::now();
-	static std::wstring fileName;
+	// Only needed in this function
+	typedef std::chrono::high_resolution_clock clock;	
+	typedef std::chrono::duration<float> duration;
 
-	// auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - timer);
-	std::chrono::duration<float> delta = std::chrono::high_resolution_clock::now() - timer;
+	static clock::time_point timer = clock::now();
+
+	static std::wstring fileName;
+	static float accumDelta = 0;
+
+	duration delta = clock::now() - timer;
+
+	HRESULT result;
 
 	if (capturing && !ets2dc_telemetry::output_paused) {
-		if (delta.count() >= (1.0f / consecutiveFramesCapture)) {			
+		endRawInputCapture();
+
+		accumDelta += delta.count();
+
+		if (accumDelta >= (1.0f / consecutiveFramesCapture)) {			
 			stats.snapshot_time = std::chrono::system_clock::now();
 
 			try {
@@ -457,33 +583,33 @@ HRESULT ETS2Hook::Present(IDXGISwapChain* swapChain)
 				TakeScreenshot2(swapChain, fileName.c_str());
 			}
 			
-			PLOGD << L"Saved ETS2 snapshot to " << fileName << " : " << delta.count();
+			PLOGD << L"Saved ETS2 snapshot to " << fileName << " : " << accumDelta;
 			stats.frame++;
 			stats.total_frames++;
 
-			timer = std::chrono::high_resolution_clock::now();
+			accumDelta = 0.0f;
 		}		
 
-		PLOGV << "Time elapsed: " << delta.count();
+		PLOGV << "Time elapsed: " << accumDelta;
+
+		result = oPresent(swapChain, SyncInterval, Flags);
 	}
 	else {
-		if (imGuiDrawEnabled) {
+		accumDelta = 0.0f;
+
+		if (imGuiDrawEnabled && ets2dc_telemetry::output_paused) {
 			startRawInputCapture();
-
-			static time_t timer2 = clock();
-			if ((clock() - timer2) / CLOCKS_PER_SEC >= 5) {
-				PLOGV << "Rendering ImGui - output_paused: " << ets2dc_telemetry::output_paused;
-				timer2 = clock();
-			}
-
 			renderImGui();
 			stats.frame = 0;
 		}
 		else {
 			endRawInputCapture();
 		}
+
+		result = oPresent(swapChain, SyncInterval, Flags);
 	}
 
-	return S_OK;
+	timer = std::chrono::high_resolution_clock::now();
+	return result;
 }
 #pragma endregion

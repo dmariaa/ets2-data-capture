@@ -194,6 +194,12 @@
     <ClInclude Include="readerwriterqueue\readerwriterqueue.h">
       <Filter>readerwriterqueue</Filter>
     </ClInclude>
+    <ClInclude Include="TextureBuffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Color.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -254,6 +260,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ets2dc_telemetry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TextureBuffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
