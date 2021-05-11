@@ -150,6 +150,9 @@ AppSettings::AppSettings()
     currentLogLevel = ets2dc_utils::logLevelFromString(configLogLevel);
     consecutiveFrames = ets2dc_config::get(ets2dc_config_keys::consecutive_frames, 2);
     secondsBetweenSnapshots = ets2dc_config::get(ets2dc_config_keys::seconds_between_captures, 3);
+    captureDepth = ets2dc_config::get(ets2dc_config_keys::capture_depth, true);
+    captureTelemetry = ets2dc_config::get(ets2dc_config_keys::capture_telemtry, true);
+
     simulate = false;
 }
 
@@ -185,8 +188,12 @@ void AppSettings::Draw(const char* windowName)
         ImGui::Separator();
         someChanged |= changed || ImGui::SliderInt("FPS recorded", &consecutiveFrames, 1, 30);
         someChanged |= ImGui::SliderInt("Seconds between snapshots", &secondsBetweenSnapshots, 1, 60);
-        someChanged |= ImGui::Checkbox("Simultate (log only)", &simulate);
+        someChanged |= ImGui::Checkbox("Capture depth", &captureDepth); ImGui::SameLine(); 
+        someChanged |= ImGui::Checkbox("Capture telemtry", &captureTelemetry);
 
+        ImGui::Separator();
+
+        someChanged |= ImGui::Checkbox("Simulate (log only)", &simulate);
         if (ImGui::Button(isCapturing ? "Stop capturing" : "Start capturing")) 
         {
             isCapturing = !isCapturing;
@@ -206,6 +213,29 @@ void AppSettings::Draw(const char* windowName)
         ImGui::ShowDemoWindow();
     }
 }
+
+//void ToggleButton(const char* str_id, bool* v)
+//{
+//    ImVec4* colors = ImGui::GetStyle().Colors;
+//    ImVec2 p = ImGui::GetCursorScreenPos();
+//    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+//
+//    float height = ImGui::GetFrameHeight();
+//    float width = height * 1.55f;
+//    float radius = height * 0.50f;
+//
+//    ImGui::InvisibleButton(str_id, ImVec2(width, height));
+//    if (ImGui::IsItemClicked()) *v = !*v;
+//    ImGuiContext& gg = *GImGui;
+//    float ANIM_SPEED = 0.085f;
+//    if (gg.LastActiveId == gg.CurrentWindow->GetID(str_id))// && g.LastActiveIdTimer < ANIM_SPEED)
+//        float t_anim = ImGui::ImSaturate(gg.LastActiveIdTimer / ANIM_SPEED);
+//    if (ImGui::IsItemHovered())
+//        draw_list->AddRectFilled(p, ImVec2(p.x + width, p.y + height), ImGui::GetColorU32(*v ? colors[ImGuiCol_ButtonActive] : ImVec4(0.78f, 0.78f, 0.78f, 1.0f)), height * 0.5f);
+//    else
+//        draw_list->AddRectFilled(p, ImVec2(p.x + width, p.y + height), ImGui::GetColorU32(*v ? colors[ImGuiCol_Button] : ImVec4(0.85f, 0.85f, 0.85f, 1.0f)), height * 0.50f);
+//    draw_list->AddCircleFilled(ImVec2(p.x + radius + (*v ? 1 : 0) * (width - radius * 2.0f), p.y + radius), radius - 1.5f, IM_COL32(255, 255, 255, 255));
+//}
 
 bool AppSettings::hasChanged()
 {

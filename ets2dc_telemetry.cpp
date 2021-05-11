@@ -72,12 +72,12 @@ SCSAPI_RESULT ets2dc_telemetry::init(const scs_u32_t version, const scs_telemetr
 
 SCSAPI_VOID ets2dc_telemetry::telemetry_frame_start(const scs_event_t UNUSED(event), const void* const event_info, const scs_context_t UNUSED(context))
 {
-	PLOGV << "Telemetry frame start called ";
+	// PLOGV << "Telemetry frame start called ";
 }
 
 SCSAPI_VOID ets2dc_telemetry::telemetry_frame_end(const scs_event_t UNUSED(event), const void* const UNUSED(event_info), const scs_context_t UNUSED(context))
 {
-	PLOGV << "Telemetry frame end called";
+	// PLOGV << "Telemetry frame end called";
 }
 
 SCSAPI_VOID ets2dc_telemetry::telemetry_pause(const scs_event_t event, const void* const UNUSED(event_info), const scs_context_t UNUSED(context))

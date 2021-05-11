@@ -204,3 +204,62 @@ HRESULT ETS2Hook::Present(IDXGISwapChain* swapChain)
 	return S_OK;
 }
 #pragma endregion
+
+
+
+if (FAILED(hr) || pScreenshotTexture == NULL) {
+	PLOGE << "Error capturing buffer for screenshot to " << fileName;
+}
+else
+{
+	SnapshotData* data = new SnapshotData();
+	DirectX::ScratchImage* scratchImage = new DirectX::ScratchImage();
+	hr = DirectX::CaptureTexture(pDevice, pDeviceContext, pScreenshotTexture, *scratchImage);
+
+	if (FAILED(hr))
+	{
+		PLOGE << "Error capturing screenshot: " << ets2dc_utils::GetErrorDesc(hr);
+		return hr;
+	}
+
+	data->image = scratchImage;
+	data->depth = nullptr;
+
+	//if (*pDepthTexture != nullptr)
+	//{
+	//	DirectX::ScratchImage* depthScratchImage = new DirectX::ScratchImage();
+	//	hr = DirectX::CaptureTexture(pDevice, pDeviceContext, *pDepthTexture, *depthScratchImage);
+
+	//	if (FAILED(hr))
+	//	{
+	//		PLOGE << "Error capturing depth: " << ets2dc_utils::GetErrorDesc(hr);
+	//	}
+	//	else {
+	//		DirectX::TexMetadata metadata = depthScratchImage->GetMetadata();
+	//		
+	//		PLOGV << "----------------------------------" << std::endl
+	//			<< "Depth texture: " << std::endl
+	//			<< " width: " << metadata.width << std::endl
+	//			<< " height: " << metadata.height << std::endl
+	//			<< " depth:" << metadata.depth << std::endl
+	//			<< " array size: " << metadata.arraySize << std::endl
+	//			<< " mip levels: " << metadata.mipLevels << std::endl
+	//			<< " format: " << metadata.format << std::endl
+	//			<< " dimension: " << metadata.dimension << std::endl
+	//			<< " is depth texture: " << DirectX::IsDepthStencil(metadata.format) << std::endl
+	//			<< "----------------------------------";
+
+	//		data->depth = depthScratchImage;
+	//	}
+	//}
+
+	data->frame_stats = stats;
+	data->fileName = std::wstring(fileName);
+	queue.enqueue(data);
+
+	pScreenshotTexture->Release();
+
+	saveDepthTexture(fileName);
+}
+
+return hr;
