@@ -18,7 +18,6 @@
 
 #include "config.h"
 #include "ets2dc_imgui.h"
-#include "ets2dc_telemetry.h"
 
 ETS2Hook* hook = nullptr;
 
@@ -77,9 +76,9 @@ SCSAPI_RESULT scs_telemetry_init(const scs_u32_t version, const scs_telemetry_in
         ets2dc_config::init();
 
         // Init logging
-        const std::wstring logFile = ets2dc_utils::getProjectDataFolder() + L"ets2-data-capture.log";
+        const std::wstring logFile = ets2dc_utils::GetProjectDataFolder() + L"ets2-data-capture.log";
         const std::string logLevel = ets2dc_config::get("LogLevel", "error");
-        int level = ets2dc_utils::logLevelFromString(logLevel);
+        int level = ets2dc_utils::LogLevelFromString(logLevel);
 
         static plog::RollingFileAppender<plog::TxtFormatter> fileAppender(logFile.c_str());
 

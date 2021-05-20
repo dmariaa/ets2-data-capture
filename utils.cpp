@@ -8,14 +8,14 @@ namespace ets2dc_utils {
 		constexpr wchar_t appFolder[] = L"ETS2DataCapture";
 	}
 
-	int logLevelFromString(std::string logLevel)
+	int LogLevelFromString(std::string logLevel)
 	{
 		auto it = std::find(logLevels.begin(), logLevels.end(), logLevel);
 		if (it == logLevels.end()) return -1;
 		return (int)std::distance(logLevels.begin(), it);
 	}
 
-	std::wstring getDocumentsFolder()
+	std::wstring GetDocumentsFolder()
 	{
 		PWSTR documentsPath;
 		HRESULT hr = SHGetKnownFolderPath(FOLDERID_Documents, 0, NULL, &documentsPath);
@@ -24,14 +24,19 @@ namespace ets2dc_utils {
 		return dp;
 	}
 
-	std::wstring getProjectDataFolder()
+	std::wstring GetProjectDataFolder()
 	{
-		std::wstring projectData = getDocumentsFolder() + PATH_SEPARATOR + appFolder + PATH_SEPARATOR;
-		if (!PathIsDirectoryW(projectData.c_str()))
-		{
-			CreateDirectory(projectData.c_str(), NULL);
-		}
+		std::wstring projectData = GetDocumentsFolder() + PATH_SEPARATOR + appFolder + PATH_SEPARATOR;
+		CreateFolderIfNotExists(projectData);
 		return projectData;
+	}
+
+	void CreateFolderIfNotExists(std::wstring folder)
+	{
+		if (!PathIsDirectoryW(folder.c_str()))
+		{
+			CreateDirectory(folder.c_str(), NULL);
+		}
 	}
 
 	const wchar_t* GetErrorDesc(HRESULT hr)

@@ -19,6 +19,7 @@ namespace ets2dc_config {
 		static bool dirty = false;
 		static std::wstring config_file;
 		static std::map<std::string, std::string> config_options;
+		static bool autoSave = true;
 
 		void load()
 		{
@@ -51,15 +52,9 @@ namespace ets2dc_config {
 			ifs.close();
 		}
 
-		void save() {
-			std::ofstream ofs;
-			ofs.open(config_file, std::ofstream::out | std::ofstream::trunc);
-
-			for (const auto& config_option : config_options) {
-				ofs << config_option.first << "=" << config_option.second << std::endl;
-			}
-
-			ofs.close();
+		void set_auto_save(bool value)
+		{
+			autoSave = value;
 		}
 
 		template<typename T> T get(std::string key, const T& default_value)
@@ -178,4 +173,27 @@ namespace ets2dc_config {
 	{
 		return get<double>(key, default_value);
 	}
+
+	void save() {
+		std::ofstream ofs;
+		ofs.open(config_file, std::ofstream::out | std::ofstream::trunc);
+
+		for (const auto& config_option : config_options) {
+			ofs << config_option.first << "=" << config_option.second << std::endl;
+		}
+
+		ofs.close();
+	}
+
+	void begin_save_session()
+	{
+		autoSave = false;
+	}
+
+	void end_save_session()
+	{
+		save();
+		autoSave = true;
+	}
+
 }

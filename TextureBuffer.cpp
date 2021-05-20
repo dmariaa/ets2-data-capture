@@ -123,9 +123,9 @@ void TextureBuffer::saveDepth(const char* fileName)
 			if (value < header.min_val) header.min_val = value;
 			if (value > header.max_val) header.max_val = value;
 			
-			data[k_data]     = (orig[k_orig] >> 0) & 0xff;
-			data[k_data + 1] = (orig[k_orig] >> 8) & 0xff;
-			data[k_data + 2] = (orig[k_orig] >> 16) & 0xff;
+			data[k_data]     = (uint8_t)((orig[k_orig] >>  0) & 0xff);
+			data[k_data + 1] = (uint8_t)((orig[k_orig] >>  8) & 0xff);
+			data[k_data + 2] = (uint8_t)((orig[k_orig] >> 16) & 0xff);
 
 			k_data += 3;
 		}

@@ -39,10 +39,12 @@ public:
 class AppSettings {   
     bool showLogWindow = false;
     bool showImgGuiDemo = false;    
-
     bool changed = false;
-    //void ToggleButton(const char* str_id, bool* v);
+
+    void SaveSettings();
+
 public:
+    // Settings
     bool simulate;
     bool isCapturing = false;
     int currentLogLevel = 0;

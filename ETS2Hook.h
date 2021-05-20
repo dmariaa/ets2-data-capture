@@ -5,12 +5,14 @@
 
 class Config;
 class AppSettings;
+class TelemetryFile;
 
 class SnapshotData 
 {
 public:
 	TextureBuffer* image;
 	TextureBuffer* depth;
+	ets2dc_telemetry::telemetry_state* telemetry;
 
 	snapshot_stats frame_stats;	
 	std::wstring fileName;
@@ -19,6 +21,7 @@ public:
 	{
 		if (image != nullptr) delete image;
 		if (depth != nullptr) delete depth;
+		if (telemetry != nullptr) delete telemetry;
 	}
 };
 
@@ -27,8 +30,6 @@ public:
 /// </summary>
 class ETS2Hook
 {
-	static const wchar_t* fmtFile;
-
 	// Pointers to useful objects
 	ID3D11Device* pDevice = nullptr;
 	ID3D11DeviceContext* pDeviceContext = nullptr;	
@@ -38,9 +39,9 @@ class ETS2Hook
 
 	bool simulate;
 	bool inputCaptured;
+	bool startCapture;
 	std::atomic<bool> capturing;
 	snapshot_stats stats;	
-
 
 	// Configuration vars
 	int consecutiveFramesCapture;
@@ -50,7 +51,9 @@ class ETS2Hook
 	std::wstring imageFolder;
 	std::wstring imageFileFormat;
 	std::wstring imageFileName;	
+	
 	std::wstring formatString;
+	std::wstring snapshotId;
 
 	// ImGui Stuff	
 	bool imGuiDrawEnabled;
@@ -80,19 +83,25 @@ class ETS2Hook
 	LRESULT CALLBACK mouseHook(int nCode, WPARAM wParam, LPARAM lParam);
 
 	// Some util functions
-	HRESULT TakeScreenshot1(IDXGISwapChain* swapChain, const wchar_t* fileName);
-	HRESULT TakeScreenshot2(IDXGISwapChain* swapChain, const wchar_t* fileName);
+	HRESULT TakeScreenshot1(IDXGISwapChain* swapChain);
+	HRESULT TakeScreenshot2();
+
+	const std::wstring GenerateFileName();
+	void GenerateFileFormatString();
 
 	// Settings change update
 	void updateSettings();
 	AppSettings* appSettings;
 
+	// Telemetry file
+	TelemetryFile* telemetryFile;
+	void InitTelemetryFile();
+	void CloseTelemetryFile();
+
 	// Writing thread
 	moodycamel::ReaderWriterQueue<SnapshotData*> queue;
 	std::atomic_bool captureThreadRunning = true;
 	void saveBuffer();
-
-	void saveDepthTexture(std::wstring fileName);
 public:
 	ETS2Hook();
 	~ETS2Hook();

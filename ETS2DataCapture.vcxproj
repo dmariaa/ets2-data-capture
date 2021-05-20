@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -221,6 +221,7 @@
     <ClInclude Include="scs_sdk_1_12\include\scssdk_telemetry_channel.h" />
     <ClInclude Include="scs_sdk_1_12\include\scssdk_telemetry_event.h" />
     <ClInclude Include="scs_sdk_1_12\include\scssdk_value.h" />
+    <ClInclude Include="TelemetryFile.h" />
     <ClInclude Include="TextureBuffer.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
@@ -280,6 +281,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="TelemetryFile.cpp" />
     <ClCompile Include="TextureBuffer.cpp" />
     <ClCompile Include="utils.cpp" />
   </ItemGroup>
