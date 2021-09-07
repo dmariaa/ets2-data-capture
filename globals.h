@@ -7,7 +7,9 @@
 #include <chrono>
 #include <thread>
 #include <date/date.h>
+#define NOMINMAX
 #include <Windows.h>
+#undef NOMINMAX
 
 #include <d3d11.h>
 #pragma comment(lib, "d3d11.lib")
@@ -20,7 +22,3 @@
 #include <plog/Initializers/RollingFileInitializer.h>
 
 #include "ets2dc_telemetry.h"
-
-typedef void(__stdcall* Draw)(ID3D11DeviceContext*, UINT, UINT);
-typedef long(__stdcall* CreateTexture2D)(ID3D11Device*, D3D11_TEXTURE2D_DESC*, D3D11_SUBRESOURCE_DATA*, ID3D11Texture2D**);
-typedef long(__stdcall* Present)(IDXGISwapChain*, UINT, UINT);

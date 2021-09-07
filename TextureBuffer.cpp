@@ -1,20 +1,20 @@
 #include "TextureBuffer.h"
 
-TextureBuffer::TextureBuffer(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext, ID3D11Texture2D* origTexture)
-	: texture(nullptr), valid(false), type(TextureBuffer::Type::Invalid)
+TextureBuffer::TextureBuffer(ID3D11Device* pDevice, ID3D11DeviceContext* pDeviceContext, ID3D11Texture2D* origTexture, Type type)
+	: texture(nullptr), valid(false), type(type)
 {
 	assert(origTexture != nullptr);
 
 	origTexture->GetDesc(&desc);
 
-	if (desc.BindFlags & D3D11_BIND_DEPTH_STENCIL)
-	{
-		type = Type::Depth;
-	}
-	else if (desc.BindFlags & D3D11_BIND_SHADER_RESOURCE || desc.BindFlags & D3D11_BIND_RENDER_TARGET)
-	{
-		type =  Type::ScreenShot;
-	}
+	//if (desc.BindFlags & D3D11_BIND_DEPTH_STENCIL)
+	//{
+	//	type = Type::Depth;
+	//}
+	//else if (desc.BindFlags & D3D11_BIND_SHADER_RESOURCE || desc.BindFlags & D3D11_BIND_RENDER_TARGET)
+	//{
+	//	type =  Type::ScreenShot;
+	//}
 
 	desc.Usage = D3D11_USAGE_STAGING;
 	desc.BindFlags = 0;
@@ -99,7 +99,7 @@ void TextureBuffer::saveDepth(const char* fileName)
 	std::string name(fileName);
 	name += ".depth.raw";
 
-	DEPTHHead header(desc.Width, desc.Height);
+	DEPTHHead header(desc.Width, desc.Height, false);
 
 	FILE* fp;
 	fopen_s(&fp, name.c_str(), "wb");
@@ -138,6 +138,47 @@ void TextureBuffer::saveDepth(const char* fileName)
 	delete[] data;
 }
 
+void TextureBuffer::saveRealDepth(const char* fileName)
+{
+	// Real depth texture format R16G16B16A16_FLOAT
+	std::string name(fileName);
+	name += ".depth.raw";
+
+	DEPTHHead header(desc.Width, desc.Height, true);
+
+	FILE* fp;
+	fopen_s(&fp, name.c_str(), "wb");
+
+	int width = desc.Width;
+	int height = desc.Height;
+	size_t size = width * height;
+
+	half* data = new half[size];
+	RealDepthData* orig = reinterpret_cast<RealDepthData*>(mappedRes.pData);
+	int k_orig = 0, k_data = 0;
+
+	for (int row = height - 1; row >= 0; row--)
+	{
+		for (int col = 0; col < width; col++)
+		{
+			k_orig = row * width + col;
+			RealDepthData value = orig[k_orig];
+
+			if (value.z < header.min_val) header.min_val = value.z;
+			if (value.z > header.max_val) header.max_val = value.z;
+
+			data[k_data] = value.z;
+			k_data++;
+		}
+	}	
+
+	fwrite(&header, sizeof(header), 1, fp);
+	fwrite(data, sizeof(half), size, fp);
+	fclose(fp);
+
+	delete[] data;
+}
+
 void TextureBuffer::save(const char* fileName)
 {
 	if (!valid) {
@@ -145,13 +186,17 @@ void TextureBuffer::save(const char* fileName)
 		return;
 	}
 
-	if (type == Type::ScreenShot)
+	if (type == Type::Color)
 	{
 		return saveScreenshot(fileName);
 	}
-	else if (type == Type::Depth) 
+	else if (type == Type::DepthBuffer) 
 	{
-		return saveDepth(fileName);
+		return saveDepth(fileName);		
+	}
+	else if (type == Type::RealDepthTexture)
+	{
+		return saveRealDepth(fileName);
 	}
 
 	PLOGE << "Invalid texture type";

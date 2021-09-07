@@ -200,6 +200,15 @@
     <ClInclude Include="Color.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TelemetryFile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ets2dc_dx11hook.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="half.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -266,6 +275,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="TextureBuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="TelemetryFile.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ets2dc_dx11hook.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
