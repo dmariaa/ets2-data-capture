@@ -13,7 +13,7 @@ to train depth estimation neural networks.
 
 # Compiling
 Just download the repo including subprojects, make sure you have installed
-DirectX SDK and build the solution. Last step of build will copy the resulting
+DirectX SDK, open it with Visual Studio 2019 and build the solution. Last step of build will copy the resulting
 DLL to the Euro Truck Simulator 2:tm: plugins folder (STEAM VERSION) and it will
 be loaded as you load the game.
 
