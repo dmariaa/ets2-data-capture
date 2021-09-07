@@ -14,6 +14,7 @@
 [submodule "readerwriterqueue"]
 	path = readerwriterqueue
 	url = https://github.com/cameron314/readerwriterqueue.git
+	ignore = untracked
 [submodule "tools/dataset-viewer"]
 	path = tools/dataset-viewer
 	url = git@github.com:dmariaa/ets2-dataset-viewer.git
