@@ -106,6 +106,9 @@
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>Source.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /R /Y "$(ProjectDir)$(PlatformShortName)\$(Configuration)\$(ProjectName).dll" "$(ETS_STEAM_PROGRAM_FOLDER)\plugins"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -127,6 +130,9 @@
       <EnableUAC>false</EnableUAC>
       <ModuleDefinitionFile>Source.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /R /Y "$(ProjectDir)$(PlatformShortName)\$(Configuration)\$(ProjectName).dll" "$(ETS_STEAM_PROGRAM_FOLDER)\plugins"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -146,6 +152,9 @@
       <AdditionalDependencies>DirectXTK.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>ETS2DataCapture.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /R /Y "$(ProjectDir)$(PlatformShortName)\$(Configuration)\$(ProjectName).dll" "$(ETS_STEAM_PROGRAM_FOLDER)\plugins"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -170,6 +179,9 @@
       <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>ETS2DataCapture.def</ModuleDefinitionFile>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /R /Y "$(ProjectDir)$(PlatformShortName)\$(Configuration)\$(ProjectName).dll" "$(ETS_STEAM_PROGRAM_FOLDER)\plugins"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Color.h" />
@@ -182,11 +194,13 @@
     <ClInclude Include="dinput8_hook\minhook\src\hde\table32.h" />
     <ClInclude Include="dinput8_hook\minhook\src\hde\table64.h" />
     <ClInclude Include="dinput8_hook\minhook\src\trampoline.h" />
+    <ClInclude Include="ets2dc_dx11hook.h" />
     <ClInclude Include="ets2dc_imgui.h" />
     <ClInclude Include="ets2dc_telemetry.h" />
     <ClInclude Include="ETS2Hook.h" />
     <ClInclude Include="config.h" />
     <ClInclude Include="globals.h" />
+    <ClInclude Include="half.hpp" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />
     <ClInclude Include="imgui\imgui_impl_dx11.h" />
@@ -229,6 +243,7 @@
     <ClCompile Include="config.cpp" />
     <ClCompile Include="dinput8_hook\dinput8_hook.cpp" />
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="ets2dc_dx11hook.cpp" />
     <ClCompile Include="ets2dc_imgui.cpp" />
     <ClCompile Include="ets2dc_telemetry.cpp" />
     <ClCompile Include="ETS2Hook.cpp" />

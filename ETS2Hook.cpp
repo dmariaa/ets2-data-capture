@@ -32,13 +32,17 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 WNDPROC ETS2Hook::ETS2_hWndProc = nullptr;
 ETS2Hook* ETS2Hook::pThis = nullptr;
 
-ETS2Hook::ETS2Hook() : Initialized(false), capturing(false), simulate(false), inputCaptured(false), queue(100), telemetryFile(nullptr)
+ETS2Hook::ETS2Hook() : Initialized(false), capturing(0), simulate(false), inputCaptured(false), queue(100), telemetryFile(nullptr),
+	captureDepth(0)
 {
 	imageFolder = ets2dc_config::get(ets2dc_config::keys::image_folder, ets2dc_config::default_values::image_folder);
 	imageFileFormat = ets2dc_config::get(ets2dc_config::keys::image_file_format, ets2dc_config::default_values::image_file_format);
 	imageFileName = ets2dc_config::get(ets2dc_config::keys::image_file_name, ets2dc_config::default_values::image_file_name);
 	consecutiveFramesCapture = ets2dc_config::get(ets2dc_config::keys::consecutive_frames, ets2dc_config::default_values::consecutive_frames);
 	secondsBetweenCaptures = ets2dc_config::get(ets2dc_config::keys::seconds_between_captures, ets2dc_config::default_values::seconds_between_captures);
+	
+	// TODO: Session management
+	// Reinit session number every day
 	stats.session = ets2dc_config::get(ets2dc_config::keys::last_session, ets2dc_config::default_values::last_session);
 
 	PLOGI << "Configuration -------------------------------";
@@ -74,17 +78,25 @@ HRESULT ETS2Hook::Init(IDXGISwapChain* pSwapChain)
 	HRESULT hr = S_OK;
 
 	if (pDevice == nullptr) {
+		//hr = pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pSwapchainImageTexture);
+
+		//if (SUCCEEDED(hr)) {
+		//	PLOGD << "Swapchain texture grabbed succesfully";
+		//}
+
 		hr = pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)&pDevice);
 
 		if (SUCCEEDED(hr)) {
 			pDevice->GetImmediateContext(&pDeviceContext);
+
 			initImGui(pSwapChain, pDevice, pDeviceContext);
 			initInput();
 
-			// Test thread
+			// Buffer saving thread
 			std::thread(&ETS2Hook::saveBuffer, this).detach();
-
+			
 			Initialized = true;
+			PLOGD << "Euro Truck Simulator 2 Hook initialized";
 		}
 	}
 
@@ -155,18 +167,16 @@ void ETS2Hook::shutdownImGui()
 void ETS2Hook::updateSettings()
 {
 	consecutiveFramesCapture = appSettings->consecutiveFrames;
-	secondsBetweenCaptures = appSettings->secondsBetweenSnapshots;
-	captureDepth = appSettings->captureDepth;
+	secondsBetweenCaptures = appSettings->secondsBetweenSnapshots;	
+	
+	// This is a stupid trick, now it allways record real depth texture,
+	// change settings and gui to be able to choose it
+	captureDepth = appSettings->captureDepth * 2;	
+
 	captureTelemetry = appSettings->captureTelemetry;
 	simulate = appSettings->simulate;
 
-	// Capturing has stopped, increment session
-	if (!capturing && capturing != appSettings->isCapturing)
-	{
-		startCapture = true;
-	}
-
-	capturing = appSettings->isCapturing;
+	capturing = appSettings->isCapturing ? 1 : 0;
 	PLOGD << "Capturing state set to: " << capturing;
 
 	plog::get()->setMaxSeverity(plog::Severity(appSettings->currentLogLevel));
@@ -400,7 +410,7 @@ HRESULT ETS2Hook::TakeScreenshot1(IDXGISwapChain* pSwapChain)
 		std::wstring_convert<std::codecvt_utf8<wchar_t>> conv1;
 		fname = conv1.to_bytes(fileName);
 
-		TextureBuffer* texture = new TextureBuffer(pDevice, pDeviceContext, pScreenshotTexture);
+		TextureBuffer* texture = new TextureBuffer(pDevice, pDeviceContext, pScreenshotTexture, TextureBuffer::Type::Color);
 		texture->save(fname.c_str());
 	}
 		
@@ -429,21 +439,23 @@ HRESULT ETS2Hook::TakeScreenshot2()
 		if (pScreenshotTexture != nullptr)
 		{
 			PLOGV << "Screenshot texture: \n" << ets2dc_utils::DumptTextureData(pScreenshotTexture);
-			TextureBuffer* buffer = new TextureBuffer(pDevice, pDeviceContext, pScreenshotTexture);
+			TextureBuffer* buffer = new TextureBuffer(pDevice, pDeviceContext, pScreenshotTexture, TextureBuffer::Type::Color);
 
-			if (buffer->type == TextureBuffer::Type::ScreenShot)
+			if (buffer->type != TextureBuffer::Type::Invalid)
 			{
 				data->image = buffer;
 				capture = true;
 			}
 		}
 
-		if (pDepthTexture != nullptr && captureDepth)
+		if (pDepthTexture != nullptr && captureDepth > 0)
 		{
 			PLOGV << "Depth texture: \n" << ets2dc_utils::DumptTextureData(pDepthTexture);
-			TextureBuffer* buffer = new TextureBuffer(pDevice, pDeviceContext, pDepthTexture);
 
-			if (buffer->type == TextureBuffer::Type::Depth)
+			TextureBuffer::Type bufferType = captureDepth == 1 ? TextureBuffer::Type::DepthBuffer : TextureBuffer::Type::RealDepthTexture;
+			TextureBuffer* buffer = new TextureBuffer(pDevice, pDeviceContext, pDepthTexture, bufferType);
+
+			if (buffer->type != TextureBuffer::Type::Invalid)
 			{
 				data->depth = buffer;
 				capture = true;
@@ -474,7 +486,6 @@ HRESULT ETS2Hook::TakeScreenshot2()
 void ETS2Hook::saveBuffer()
 {
 	SnapshotData* data;
-	HRESULT result;
 
 	while (captureThreadRunning) {
 		if (capturing) {
@@ -502,93 +513,187 @@ void ETS2Hook::saveBuffer()
 #pragma endregion
 
 #pragma region DirectX 11 Hooks
-void ETS2Hook::DrawHook(Draw oDraw, ID3D11DeviceContext* context, UINT VertexCount, UINT StartVertexLocation)
-{
-	PLOGV << "Draw called";
-	oDraw(context, VertexCount, StartVertexLocation);
+void ETS2Hook::DrawHook(ets2dc_dx11hook::Draw oDraw, ID3D11DeviceContext* context, UINT VertexCount, UINT StartVertexLocation)
+{	
+	if (IsCapturing()) {
+		// Only if texure pointers need to be updated
+		if (pScreenshotTexture == nullptr) {
+			// Last draw to depth texture reveals final render target
+			// and depth buffer
+			ID3D11RenderTargetView* renderTargetView = nullptr;
+			ID3D11DepthStencilView* depthStencilView = nullptr;
+			context->OMGetRenderTargets(1, &renderTargetView, &depthStencilView);
 
-	if (capturing && !ets2dc_telemetry::output_paused)
-	{
-		ID3D11RenderTargetView* renderTargetView = nullptr;
-		ID3D11DepthStencilView* depthStencilView = nullptr;
-		context->OMGetRenderTargets(1, &renderTargetView, &depthStencilView);
-
-		if (depthStencilView != nullptr && renderTargetView != nullptr)
-		{
-			ID3D11Resource* res = nullptr;
-			renderTargetView->GetResource(&res);
-
-			if (res != nullptr)
+			if (renderTargetView != nullptr && depthStencilView != nullptr)
 			{
-				pScreenshotTexture = nullptr;
-				res->QueryInterface(&pScreenshotTexture);
-				res->Release();
+				// there is only a depth stencil view, the right one
+				ID3D11Resource* res = nullptr;
+				renderTargetView->GetResource(&res);
+
+				if (res != nullptr)
+				{
+					pLastScreenshotTexture = nullptr;
+					res->QueryInterface(&pLastScreenshotTexture);
+					res->Release();
+				}
+
+				renderTargetView->Release();
+				PLOGV << "Render buffer resource grabbed";
+
+				if(captureDepth==1) 
+				{
+					res = nullptr;
+					depthStencilView->GetResource(&res);
+
+					if (res != nullptr)
+					{
+						pLastDepthTexture = nullptr;
+						res->QueryInterface(&pLastDepthTexture);
+						res->Release();
+					}
+
+					depthStencilView->Release();
+					PLOGV << "Depth buffer resource grabbed";
+				}
 			}
-
-			renderTargetView->Release();
-
-			res = nullptr;
-			depthStencilView->GetResource(&res);
-
-			if (res != nullptr)
-			{
-				pDepthTexture = nullptr;
-				res->QueryInterface(&pDepthTexture);
-				res->Release();
-			}
-
-			depthStencilView->Release();
 		}
 	}
+
+	oDraw(context, VertexCount, StartVertexLocation);
 }
 
-HRESULT ETS2Hook::CreateTexture2DHook(CreateTexture2D oCreateTexture2D, ID3D11Device* device, D3D11_TEXTURE2D_DESC* pDesc, D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
+HRESULT ETS2Hook::CreateTexture2DHook(ets2dc_dx11hook::CreateTexture2D oCreateTexture2D, ID3D11Device* device, D3D11_TEXTURE2D_DESC* pDesc, D3D11_SUBRESOURCE_DATA* pInitialData, ID3D11Texture2D** ppTexture2D)
 {
-	PLOGV << "Create Texture 2D called";
-
 	HRESULT result = oCreateTexture2D(device, pDesc, pInitialData, ppTexture2D);
 
-	if (!FAILED(result) && *ppTexture2D != nullptr && pDesc->BindFlags == D3D11_BIND_DEPTH_STENCIL)
-	{
-		PLOGD << "---------------------------------------------------" << std::endl
-			<< "Depth texture created " << std::endl
-			<< ets2dc_utils::DumptTextureData(*ppTexture2D);
-	}
+	// Code only for debugging purpose
+	// 
+	//if (!FAILED(result) && *ppTexture2D != nullptr && pDesc->BindFlags == D3D11_BIND_DEPTH_STENCIL)
+	//{
+	//	PLOGD << "---------------------------------------------------" << std::endl
+	//		<< "Depth texture created " << std::endl
+	//		<< ets2dc_utils::DumptTextureData(*ppTexture2D);
+	//}
 
 	return result;
 }
 
-HRESULT ETS2Hook::PresentHook(Present oPresent, IDXGISwapChain* swapChain, UINT SyncInterval, UINT Flags)
+void ETS2Hook::ClearDepthStencilViewHook(ets2dc_dx11hook::ClearDepthStencilView oClearDepthStencilView, ID3D11DeviceContext* deviceContext, ID3D11DepthStencilView* pDepthStencilView, UINT ClearFlags, FLOAT Depth, UINT8 Stencil)
 {
-	// Only needed in this function
-	typedef std::chrono::high_resolution_clock clock;
-	typedef std::chrono::duration<float> duration;
+	ID3D11Resource* res = nullptr;
 
-	static clock::time_point timer = clock::now();
+	// This is a simple way to capture depth-stencil buffer,
+	// the problem is there is no simple way to get render-buffer as ETS2
+	// uses a temp buffer for this, so we capture both in Draw function
+	// 
+	// pDepthStencilView->GetResource(&res);
+	// if (res != nullptr)
+	// {
+	//	res->QueryInterface(&pLastDepthTexture);
+	// 	res->Release();
+	//}
 
-	static float accumDelta = 0;
+	oClearDepthStencilView(deviceContext, pDepthStencilView, ClearFlags, Depth, Stencil);
+}
 
-	duration delta = clock::now() - timer;
+void ETS2Hook::ClearRenderTargetViewHook(ets2dc_dx11hook::ClearRenderTargetView oClearRenderTargetView, ID3D11DeviceContext* deviceContext, ID3D11RenderTargetView* pRenderTargetView, const FLOAT ColorRGBA[4])
+{
+	static int clearCalls = 0;
 
-	HRESULT result;
-
-	if (capturing && !ets2dc_telemetry::output_paused) {
-		endRawInputCapture();
-
-		if (startCapture)
+	if (Initialized && IsCapturing())
+	{
+		if (frameStart)
 		{
+			clearCalls = 0;
+			frameStart = false;
+		}		
+
+		if (clearCalls == 1 && pDepthTexture==nullptr && captureDepth==2)	
+		{
+			// This is the real depth texture we want
+			ID3D11Resource *resource = nullptr;
+			pRenderTargetView->GetResource(&resource);
+			resource->QueryInterface(&pDepthTexture);
+			resource->Release();
+
+			PLOGD << "Real depth texture resource grabbed from call #" << clearCalls;
+		}
+	}
+
+	oClearRenderTargetView(deviceContext, pRenderTargetView, ColorRGBA);
+	clearCalls++;
+}
+
+HRESULT ETS2Hook::PresentHook(ets2dc_dx11hook::Present oPresent, IDXGISwapChain* swapChain, UINT SyncInterval, UINT Flags)
+{
+	if (!Initialized)
+	{
+		Init(swapChain);
+	}
+	
+
+	// Don't need a class property for this, as this class is singleton during app life
+	static clock::time_point timer = clock::now(); 
+
+	duration delta = clock::now() - timer;	
+
+	if (IsCapturing()) {
+		CaptureBlock(delta.count());
+	}
+	else {
+		PauseBlock(delta.count());		
+	}
+	
+	HRESULT result = oPresent(swapChain, SyncInterval, Flags);
+	timer = clock::now();
+
+	frameStart = true;
+	return result;
+}
+#pragma endregion
+
+#pragma region Capture and Pause blocks
+
+
+void ETS2Hook::CaptureBlock(float deltaTime)
+{
+	static float accumDelta = 0.0f;
+
+	// End raw input capture just in case is not stopped now
+	endRawInputCapture();
+
+	if (IsCapturing()) {
+		if (pDepthTexture == nullptr || pScreenshotTexture == nullptr)
+		{
+			// return until both references are grabbed
+			PLOGV << "Depth or Render buffer not grabbed";
+			// pDepthTexture = pLastDepthTexture;
+			pScreenshotTexture = pLastScreenshotTexture;
+			return;
+		}
+
+		// capture just restarted
+		if (capturing == 1) {
+			// this is a new session, reset counters
 			stats.snapshot_time = std::chrono::system_clock::now();
 			stats.session++;
-			stats.frame = 0;			
+			stats.frame = 0;
+
+			// Save last session value in config file
+			ets2dc_config::begin_save_session();
+			ets2dc_config::set(ets2dc_config::keys::last_session, (int)stats.session);
+			ets2dc_config::end_save_session();
+
+			// Initialize telemetry file and file format strings
 			GenerateFileFormatString();
 			InitTelemetryFile();
 
-			startCapture = false;
-		}
-
-		accumDelta += delta.count();
+			accumDelta = 0.0f;
+			capturing = 2;
+		}		
 
 		if (accumDelta >= (1.0f / consecutiveFramesCapture)) {
+			PLOGV << "Time elapsed since last snapshot: " << accumDelta << " taking a new snapshot";
 			stats.snapshot_time = std::chrono::system_clock::now();
 			stats.frame++;
 			stats.total_frames++;
@@ -596,31 +701,51 @@ HRESULT ETS2Hook::PresentHook(Present oPresent, IDXGISwapChain* swapChain, UINT 
 			TakeScreenshot2();
 			accumDelta = 0.0f;
 		}
+		else 
+		{
+			accumDelta += deltaTime;
+		}
+	}	
+}
 
-		PLOGV << "Time elapsed: " << accumDelta;
+void ETS2Hook::PauseBlock(float deltaTime)
+{
+	// Reset textures, we have gone to pause state
+	// Just in case ETS2 decides to change context and
+	// invalidate current buffers
+	if (pDepthTexture != nullptr)
+	{
+		pDepthTexture->Release();
+		pDepthTexture = nullptr;
+		PLOGV << "Depth texture released";
+	}
+	
+	if (pScreenshotTexture != nullptr)
+	{
+		pScreenshotTexture->Release();
+		pScreenshotTexture = nullptr;
+		PLOGV << "Render texture released";
+	}
 
-		result = oPresent(swapChain, SyncInterval, Flags);
+	// Do Gui management
+	if (imGuiDrawEnabled && ets2dc_telemetry::output_paused) {
+		startRawInputCapture();
+		renderImGui();
 	}
 	else {
-		accumDelta = 0.0f;
-
-		if (imGuiDrawEnabled && ets2dc_telemetry::output_paused) {
-			startRawInputCapture();
-			renderImGui();
-		}
-		else {
-			endRawInputCapture();
-		}
-
-		result = oPresent(swapChain, SyncInterval, Flags);
+		endRawInputCapture();
 	}
-
-	timer = std::chrono::high_resolution_clock::now();
-	return result;
 }
+
 #pragma endregion
 
 #pragma region Other usefull functions
+bool ETS2Hook::IsCapturing()
+{
+	// capturing==1 -> just restarted, capturing==2 -> already running
+	return ((capturing==1 || capturing==2) && !ets2dc_telemetry::output_paused);
+}
+
 void ETS2Hook::GenerateFileFormatString()
 {
 	std::wstring folderName = stats.formatted(imageFolder);	
