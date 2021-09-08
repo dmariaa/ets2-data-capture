@@ -8,8 +8,8 @@
     <ETS_STEAM_PROGRAM_FOLDER>$(ProgramFiles)\Steam\steamapps\common\Euro Truck Simulator 2\bin\win_$(PlatformShortName)</ETS_STEAM_PROGRAM_FOLDER>
   </PropertyGroup>
   <PropertyGroup>
-    <IncludePath>$(BOOST_ROOT);$(SolutionDir)fmt\include;$(SolutionDir)plog\include;$(SolutionDir)date\include;$(SolutionDir)DirectXTex\Include;$(SolutionDir)DirectXTK\Include;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)DirectXTex\Libs\$(PlatformShortName)\$(Configuration);$(SolutionDir)DirectXTK\Libs\x64\$(Configuration);$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
+    <IncludePath>$(BOOST_ROOT);$(SolutionDir)fmt\include;$(SolutionDir)plog\include;$(SolutionDir)date\include;$(VC_IncludePath);$(WindowsSDK_IncludePath)</IncludePath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <PostBuildEvent>

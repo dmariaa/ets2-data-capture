@@ -87,8 +87,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <LibraryPath>$(SolutionDir)DirectXTK\Libs\x64\Release;$(LibraryPath)</LibraryPath>
-    <IncludePath>$(BOOST_ROOT);$(SolutionDir)DirectXTK\Include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <IncludePath>$(BOOST_ROOT);$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -149,7 +149,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalDependencies>DirectXTK.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
       <ModuleDefinitionFile>ETS2DataCapture.def</ModuleDefinitionFile>
     </Link>
     <PostBuildEvent>
